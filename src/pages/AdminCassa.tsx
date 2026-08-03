@@ -91,6 +91,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
 function OpzioniSection({ settings }: { settings: AppSettings }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [nuovaData, setNuovaData] = useState("");
 
   const toggle = async (patch: Partial<AppSettings>) => {
     setBusy(true); setErr(null);
@@ -123,6 +124,49 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
         busy={busy}
         onToggle={() => toggle({ cassaEnabled: !settings.cassaEnabled })}
       />
+
+      <OptionRow
+        title="Blocca prenotazioni"
+        desc="Sospende SUBITO tutte le nuove prenotazioni online (imprevisti: chiusura improvvisa, guasto). Il sito mostra 'prenotazioni non disponibili'. Non tocca le prenotazioni già pagate."
+        on={settings.bookingBlocked}
+        busy={busy}
+        onToggle={() => toggle({ bookingBlocked: !settings.bookingBlocked })}
+      />
+
+      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
+        <div style={{ fontWeight: 700, fontSize: 15 }}>Giorni di chiusura</div>
+        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
+          Date in cui il locale è chiuso (ferie, festivi): in quei giorni non si può prenotare online. Non tocca le prenotazioni già pagate.
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <input type="date" value={nuovaData} onChange={(e) => setNuovaData(e.target.value)}
+            style={{ flex: 1, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 10px", fontSize: 14, color: C.ink }} />
+          <button
+            disabled={busy || !nuovaData || settings.closedDays.includes(nuovaData)}
+            onClick={() => { toggle({ closedDays: [...settings.closedDays, nuovaData].sort() }); setNuovaData(""); }}
+            style={{ background: (busy || !nuovaData || settings.closedDays.includes(nuovaData)) ? C.line : C.blue, color: (busy || !nuovaData || settings.closedDays.includes(nuovaData)) ? C.muted : "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontWeight: 700, fontSize: 14, cursor: "pointer", flexShrink: 0 }}>
+            Aggiungi
+          </button>
+        </div>
+        {settings.closedDays.length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+            {settings.closedDays.map((d) => {
+              const [y, m, g] = d.split("-");
+              return (
+                <span key={d} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 20, padding: "5px 6px 5px 11px", fontSize: 13 }}>
+                  {g}/{m}/{y}
+                  <button onClick={() => toggle({ closedDays: settings.closedDays.filter((x) => x !== d) })} disabled={busy}
+                    aria-label="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", padding: 0 }}>
+                    <X size={14} />
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 12 }}>Nessun giorno di chiusura impostato.</div>
+        )}
+      </div>
     </div>
   );
 }

@@ -167,10 +167,12 @@ service cloud.firestore {
     }
 
     /* ------------------------------------------------------------ SETTINGS
-       Impostazioni dell'attività (es. modalità cassa). Non servono al sito
-       cliente: le legge e scrive solo l'admin. */
+       Impostazioni dell'attività (modalità cassa, blocco prenotazioni, giorni
+       di chiusura). La lettura è pubblica: il sito cliente deve sapere se può
+       prenotare. La scrittura resta all'admin. Nessun dato sensibile qui. */
     match /settings/{doc} {
-      allow read, write: if isAdmin();
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

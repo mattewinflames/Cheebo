@@ -226,13 +226,13 @@ describe("holds · server-only", () => {
 /* --------------------------------------------------------------- SETTINGS
    Impostazioni dell'attività: solo l'admin legge e scrive. */
 
-describe("settings · admin-only", () => {
-  it("un anonimo non può leggerle", async () => {
+describe("settings · lettura pubblica, scrittura admin", () => {
+  it("chiunque può leggerle (il cliente deve sapere se può prenotare)", async () => {
     await seed((db) => setDoc(doc(db, "settings/app"), { cassaEnabled: true }));
-    await assertFails(getDoc(doc(anon(), "settings/app")));
+    await assertSucceeds(getDoc(doc(anon(), "settings/app")));
   });
   it("un anonimo non può scriverle", async () => {
-    await assertFails(setDoc(doc(anon(), "settings/app"), { cassaEnabled: false }));
+    await assertFails(setDoc(doc(anon(), "settings/app"), { bookingBlocked: true }));
   });
   it("l'admin legge e scrive", async () => {
     await assertSucceeds(setDoc(doc(admin(), "settings/app"), { cassaEnabled: false }));

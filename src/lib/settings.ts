@@ -2,7 +2,9 @@
    CHEEBO · Impostazioni dell'attività (settings/app su Firestore)
    ----------------------------------------------------------------------------
    Opzioni che valgono per il locale su TUTTI i dispositivi (non per-browser).
-   Le legge e scrive solo l'admin (vedi firestore.rules -> match /settings).
+   Le scrive solo l'admin; la lettura è pubblica, perché il sito cliente deve
+   sapere se le prenotazioni sono bloccate o quali giorni sono chiusi (vedi
+   firestore.rules -> match /settings).
    Pensato per crescere: è il punto unico dove aggiungere futuri interruttori
    quando Cheebo diventerà uno scheletro riconfigurabile per più attività.
    ========================================================================== */
@@ -12,12 +14,20 @@ import { db } from "./firebase";
 export interface AppSettings {
   /** Abilita la scheda Cassa (POS al banco) nell'area admin. */
   cassaEnabled: boolean;
+  /** Blocco immediato: se true, nessuna nuova prenotazione online è accettata
+   *  (imprevisti — cuoco assente, guasto). Non tocca le prenotazioni già pagate. */
+  bookingBlocked: boolean;
+  /** Giorni di chiusura programmata: date "YYYY-MM-DD" in cui non si prenota
+   *  (ferie, festivi). Vale solo per le NUOVE prenotazioni. */
+  closedDays: string[];
 }
 
 /** Valori usati quando il documento non esiste ancora o non è leggibile.
- *  cassaEnabled = true: non cambia il comportamento attuale finché non lo tocchi. */
+ *  Tutti "aperti": non cambiano il comportamento attuale finché non li tocchi. */
 export const DEFAULT_SETTINGS: AppSettings = {
   cassaEnabled: true,
+  bookingBlocked: false,
+  closedDays: [],
 };
 
 const ref = () => doc(db, "settings", "app");

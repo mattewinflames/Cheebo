@@ -32,6 +32,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const service = serviceFromKey(serviceKey);
   if (!service) return res.status(400).json({ error: "sessione inesistente" });
 
+  // Chiusure (#47): il blocco vero sta qui, non nel frontend. Se le prenotazioni
+  // sono sospese, o il giorno della serviceKey è tra quelli chiusi, si rifiuta.
+  const settingsSnap = await adminDb.collection("settings").doc("app").get();
+  const settings = settingsSnap.data() ?? {};
+  if (settings.bookingBlocked === true)
+    return res.status(409).json({ error: "prenotazioni sospese" });
+  const giorno = serviceKey.slice(0, 10); // "YYYY-MM-DD"
+  if (Array.isArray(settings.closedDays) && settings.closedDays.includes(giorno))
+    return res.status(409).json({ error: "giorno di chiusura" });
+
   // Menù reale → ricalcolo autoritativo del carrello (prezzi, patty, special).
   const menuSnap = await adminDb.collection(MENU).get();
   const menu = menuSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];

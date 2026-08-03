@@ -8,6 +8,7 @@ import {
 } from "../lib/menu";
 import { totalWindows, planFirst, planAt, firstFeasibleWindow, windowEndMin, fmt, type Service } from "../lib/dispatch";
 import { subscribeMenu } from "../lib/menuStore";
+import { subscribeSettings, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
 import { submitBooking, startCheckout, subscribeLedger, PAY_ENABLED, PAY_DEFAULT, type BookingMode, type PayMethod } from "../lib/orders";
 import { buildConfirmMessage, waLink } from "../lib/whatsapp";
 import { createPortal } from "react-dom";
@@ -29,7 +30,11 @@ export default function Prenotazioni() {
   const [err, setErr] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
 
-  const sessions = useMemo(() => upcomingSessions(), []);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const sessions = useMemo(
+    () => upcomingSessions(new Date(), undefined, { blocked: settings.bookingBlocked, closedDays: settings.closedDays }),
+    [settings.bookingBlocked, settings.closedDays],
+  );
   const [sessionKey, setSessionKey] = useState(sessions[0]?.serviceKey ?? "");
   const [ledger, setLedger] = useState<number[]>([]);
   const [stock, setStock] = useState<Record<string, number>>({});
@@ -41,6 +46,13 @@ export default function Prenotazioni() {
   const service: Service | null = session ? { startMin: session.startMin, endMin: session.endMin, label: session.label } : null;
 
   useEffect(() => subscribeMenu(setMenu, true), []);
+  useEffect(() => subscribeSettings(setSettings), []);
+  // se la sessione scelta sparisce (giorno chiuso / blocco attivato), riallinea
+  useEffect(() => {
+    if (sessions.length && !sessions.some((s) => s.serviceKey === sessionKey)) {
+      setSessionKey(sessions[0].serviceKey);
+    }
+  }, [sessions, sessionKey]);
   useEffect(() => {
     if (!service || !sessionKey) return;
     return subscribeLedger(sessionKey, totalWindows(service), (l, st) => { setLedger(l); setStock(st); });
@@ -273,6 +285,17 @@ export default function Prenotazioni() {
         <div style={{ maxWidth: 580, margin: "0 auto", paddingBottom: choice ? 92 : 24 }}>
           <Top onBack={() => setStep("menu")} title="Quando lo ritiri?" />
           <div style={{ padding: "14px 18px 24px" }}>
+            {sessions.length === 0 && (
+              <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, textAlign: "center" }}>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Prenotazioni non disponibili</div>
+                <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>
+                  {settings.bookingBlocked
+                    ? "Al momento non accettiamo prenotazioni online. Riprova più tardi."
+                    : "Non ci sono servizi prenotabili al momento. Riprova più avanti."}
+                </div>
+              </div>
+            )}
+            {sessions.length > 0 && (<>
             <Label>Giorno e servizio</Label>
             <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 18 }}>
               {sessions.map((s) => (
@@ -301,6 +324,7 @@ export default function Prenotazioni() {
                 </div>
               </>
             )}
+            </>)}
           </div>
           {choice && <Bar><button onClick={() => setStep("conferma")} style={barBtn}><span>{choice === "first" ? "Primo disponibile" : `Ritiro alle ${fmt(choice.readyMin)}`}</span><span>Continua →</span></button></Bar>}
         </div>

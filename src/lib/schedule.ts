@@ -24,7 +24,7 @@ export const toMin = (hm: string): number => {
   return h * 60 + m;
 };
 const endToMin = (end: string): number => (end === "24:00" ? 1440 : toMin(end));
-const dateKey = (d: Date): string =>
+export const dateKey = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export interface ActiveSession extends Service {
@@ -64,13 +64,23 @@ export function serviceFromKey(serviceKey: string): Service | null {
 
 const WEEKDAYS = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"];
 
-/** Sessioni prenotabili: il resto di oggi + i prossimi giorni, fino a BOOKING_DAYS_AHEAD. */
-export function upcomingSessions(now: Date = new Date(), daysAhead = BOOKING_DAYS_AHEAD): UpcomingSession[] {
+/** Sessioni prenotabili: il resto di oggi + i prossimi giorni, fino a
+ *  BOOKING_DAYS_AHEAD. Con `opts` si applicano le chiusure (#47): se `blocked`
+ *  non è prenotabile nulla; i giorni in `closedDays` (date "YYYY-MM-DD") sono
+ *  esclusi. Filtro di sola UX: il blocco vero è nel server (create-booking). */
+export function upcomingSessions(
+  now: Date = new Date(),
+  daysAhead = BOOKING_DAYS_AHEAD,
+  opts: { blocked?: boolean; closedDays?: string[] } = {},
+): UpcomingSession[] {
+  if (opts.blocked) return [];
+  const closed = new Set(opts.closedDays ?? []);
   const out: UpcomingSession[] = [];
   const nowMin = now.getHours() * 60 + now.getMinutes();
   for (let off = 0; off <= daysAhead; off++) {
     const d = new Date(now);
     d.setDate(now.getDate() + off);
+    if (closed.has(dateKey(d))) continue; // giorno di chiusura: salta tutti i suoi servizi
     const defs = SCHEDULE[d.getDay()] ?? [];
     for (const def of defs) {
       const startMin = toMin(def.start);
