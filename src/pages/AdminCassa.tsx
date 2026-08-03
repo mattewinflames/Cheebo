@@ -88,10 +88,50 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
    Contenitore pensato per crescere: oggi c'è la sola "Modalità cassa", domani
    qui vivranno gli altri interruttori dello scheletro riconfigurabile.
    ========================================================================== */
+/* Chiusure: helper per lavorare con date "YYYY-MM-DD" come giorni singoli,
+   mostrandole però raggruppate per periodi consecutivi. */
+const isoOf = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** Espande un intervallo inclusivo in tutte le sue date. */
+function espandiPeriodo(fromISO: string, toISO: string): string[] {
+  const [fy, fm, fd] = fromISO.split("-").map(Number);
+  const [ty, tm, td] = toISO.split("-").map(Number);
+  const end = new Date(ty, tm - 1, td);
+  const out: string[] = [];
+  for (const d = new Date(fy, fm - 1, fd); d <= end; d.setDate(d.getDate() + 1)) out.push(isoOf(d));
+  return out;
+}
+
+/** Raggruppa date in blocchi di giorni consecutivi. */
+function raggruppaConsecutivi(dates: string[]): { start: string; end: string; days: string[] }[] {
+  const sorted = [...new Set(dates)].sort();
+  const groups: { start: string; end: string; days: string[] }[] = [];
+  for (const d of sorted) {
+    const last = groups[groups.length - 1];
+    const [ly, lm, ld] = last ? last.end.split("-").map(Number) : [0, 0, 0];
+    const next = last ? isoOf(new Date(ly, lm - 1, ld + 1)) : "";
+    if (last && next === d) { last.end = d; last.days.push(d); }
+    else groups.push({ start: d, end: d, days: [d] });
+  }
+  return groups;
+}
+
+/** Etichetta leggibile di un gruppo: "12/08/2026" o "12/08 – 20/08/2026". */
+function labelGruppo(g: { start: string; end: string }): string {
+  const full = (iso: string) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
+  const short = (iso: string) => { const [, m, d] = iso.split("-"); return `${d}/${m}`; };
+  if (g.start === g.end) return full(g.start);
+  const sameYear = g.start.slice(0, 4) === g.end.slice(0, 4);
+  return `${sameYear ? short(g.start) : full(g.start)} – ${full(g.end)}`;
+}
+
 function OpzioniSection({ settings }: { settings: AppSettings }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [nuovaData, setNuovaData] = useState("");
+  const [dal, setDal] = useState("");
+  const [al, setAl] = useState("");
 
   const toggle = async (patch: Partial<AppSettings>) => {
     setBusy(true); setErr(null);
@@ -138,7 +178,10 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
         <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
           Date in cui il locale è chiuso (ferie, festivi): in quei giorni non si può prenotare online. Non tocca le prenotazioni già pagate.
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+
+        {/* Singolo giorno */}
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, margin: "14px 0 6px" }}>Un giorno</div>
+        <div style={{ display: "flex", gap: 8 }}>
           <input type="date" value={nuovaData} onChange={(e) => setNuovaData(e.target.value)}
             style={{ flex: 1, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 10px", fontSize: 14, color: C.ink }} />
           <button
@@ -148,23 +191,40 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
             Aggiungi
           </button>
         </div>
+
+        {/* Periodo dal / al */}
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, margin: "14px 0 6px" }}>Un periodo</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="date" value={dal} onChange={(e) => setDal(e.target.value)} aria-label="Dal"
+            style={{ flex: 1, minWidth: 130, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 10px", fontSize: 14, color: C.ink }} />
+          <span style={{ color: C.muted, fontSize: 13 }}>→</span>
+          <input type="date" value={al} min={dal || undefined} onChange={(e) => setAl(e.target.value)} aria-label="Al"
+            style={{ flex: 1, minWidth: 130, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 10px", fontSize: 14, color: C.ink }} />
+          <button
+            disabled={busy || !dal || !al || al < dal}
+            onClick={() => { toggle({ closedDays: [...new Set([...settings.closedDays, ...espandiPeriodo(dal, al)])].sort() }); setDal(""); setAl(""); }}
+            style={{ background: (busy || !dal || !al || al < dal) ? C.line : C.blue, color: (busy || !dal || !al || al < dal) ? C.muted : "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontWeight: 700, fontSize: 14, cursor: "pointer", flexShrink: 0 }}>
+            Aggiungi periodo
+          </button>
+        </div>
+        {dal && al && al < dal && <div style={{ fontSize: 12, color: C.danger, marginTop: 6 }}>La data finale è precedente a quella iniziale.</div>}
+
+        {/* Elenco, raggruppato per periodi consecutivi */}
         {settings.closedDays.length > 0 ? (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-            {settings.closedDays.map((d) => {
-              const [y, m, g] = d.split("-");
-              return (
-                <span key={d} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 20, padding: "5px 6px 5px 11px", fontSize: 13 }}>
-                  {g}/{m}/{y}
-                  <button onClick={() => toggle({ closedDays: settings.closedDays.filter((x) => x !== d) })} disabled={busy}
-                    aria-label="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", padding: 0 }}>
-                    <X size={14} />
-                  </button>
-                </span>
-              );
-            })}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+            {raggruppaConsecutivi(settings.closedDays).map((g) => (
+              <span key={g.start} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 20, padding: "5px 6px 5px 11px", fontSize: 13 }}>
+                {labelGruppo(g)}
+                {g.days.length > 1 && <span style={{ color: C.muted, fontSize: 11 }}>({g.days.length}gg)</span>}
+                <button onClick={() => toggle({ closedDays: settings.closedDays.filter((x) => !g.days.includes(x)) })} disabled={busy}
+                  aria-label="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", padding: 0 }}>
+                  <X size={14} />
+                </button>
+              </span>
+            ))}
           </div>
         ) : (
-          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 12 }}>Nessun giorno di chiusura impostato.</div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 16 }}>Nessun giorno di chiusura impostato.</div>
         )}
       </div>
     </div>
