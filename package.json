@@ -1,0 +1,40 @@
+{
+  "name": "cheebo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-cheebo \"vitest run --config vitest.rules.config.ts\"",
+    "test:watch": "vitest",
+    "verifica-regole": "node --env-file=.env scripts/verifica-regole.mjs",
+    "seed": "node --env-file=.env scripts/seed.mjs",
+    "reset": "node --env-file=.env scripts/reset.mjs",
+    "pulisci-ordini": "node --env-file=.env scripts/pulisci-ordini.mjs"
+  },
+  "dependencies": {
+    "firebase": "^11.0.0",
+    "firebase-admin": "^14.2.0",
+    "lucide-react": "0.383.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0",
+    "stripe": "^22.3.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "@types/node": "^26.1.1",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vercel/node": "^5.8.27",
+    "@vitejs/plugin-react": "^4.3.1",
+    "firebase-tools": "^13.0.0",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.0",
+    "vitest": "^2.0.5"
+  }
+}

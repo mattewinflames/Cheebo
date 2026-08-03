@@ -1,0 +1,176 @@
+rules_version = '2';
+
+/* ============================================================================
+   CHEEBO · Regole Firestore
+   ----------------------------------------------------------------------------
+   Principio: la configurazione Firebase (VITE_FB_*) è PUBBLICA — finisce nel
+   JavaScript scaricato da ogni visitatore. La sicurezza non sta nel nasconderla,
+   sta qui dentro.
+
+   Il sito cliente NON scrive più direttamente su Firestore (#41): prenota
+   tramite una funzione server (Admin SDK, che bypassa queste regole) e paga
+   con Stripe. Le uniche scritture client dirette sono quelle della CASSA, che
+   è admin loggato. Perciò menu resta in lettura pubblica, ma sessions/orders
+   sono scrivibili solo da admin, e la collezione holds è server-only.
+
+   ⚠️ ORDINE DI DEPLOY — queste regole vanno pubblicate INSIEME (o dopo) il
+   client che smette di scrivere da sé. Pubblicarle mentre è ancora online la
+   vecchia build romperebbe le prenotazioni (permission-denied lato cliente).
+
+   Nota storica: il vecchio limite (#30, il client poteva abbassare un contatore
+   del registro piastra) è chiuso proprio spostando la prenotazione lato server.
+   ========================================================================== */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    /* ---------------------------------------------------------------- MENU
+       Lo legge il sito cliente, lo modifica solo l'admin. */
+    match /menu/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    /* ------------------------------------------------------------ SESSIONS
+       Registro della piastra: nessun dato personale, ma è il cuore della
+       capacità. Prima era scrivibile da chiunque senza alcun vincolo: bastava
+       riempire tutte le finestre per bloccare le prenotazioni del locale. */
+    match /sessions/{key} {
+
+      // valori ammessi nel registro: 0..CAP (CAP = 13 in src/lib/dispatch.ts)
+      function capValues() {
+        return [0,1,2,3,4,5,6,7,8,9,10,11,12,13];
+      }
+
+      // indici finestra ammessi: il servizio più lungo (19:30-24:00) ne ha 27
+      function windowKeys() {
+        return ['0','1','2','3','4','5','6','7','8','9',
+                '10','11','12','13','14','15','16','17','18','19',
+                '20','21','22','23','24','25','26','27','28','29',
+                '30','31','32','33','34','35','36','37','38','39'];
+      }
+
+      function ledgerOk(l) {
+        return l is map
+            && l.keys().hasOnly(windowKeys())
+            && l.values().hasOnly(capValues());
+      }
+
+      /* Stock degli special: mappa itemId -> pezzi rimasti.
+         Le regole non sanno iterare una mappa, quindi l'unico modo di vincolare
+         i valori è elencarli: interi da 0 a 200. ⚠️ Uno special con più di 200
+         pezzi verrebbe RIFIUTATO — in quel caso va estesa questa lista.
+         Come per il registro della piastra (#30), resta possibile ALZARE un
+         contatore: la chiusura definitiva è la prenotazione lato server. */
+      function stockOk(d) {
+        return !('stock' in d)
+            || (d.stock is map && d.stock.values().hasOnly([
+                 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,
+                 20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,
+                 40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,
+                 60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,
+                 80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,
+                 100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,
+                 120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,
+                 140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,
+                 160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,
+                 180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,
+                 200
+               ]));
+      }
+
+      function shapeOk(d) {
+        return d.keys().hasAll(['label','startMin','endMin','ledger','seq','updatedAt'])
+            && d.keys().hasOnly(['label','startMin','endMin','ledger','seq','updatedAt','stock'])
+            && stockOk(d)
+            && d.label is string && d.label.size() <= 20
+            && d.startMin is int && d.startMin >= 0 && d.startMin <= 1440
+            && d.endMin is int && d.endMin > d.startMin && d.endMin <= 1440
+            && d.seq is int && d.seq > 0 && d.seq <= 100000
+            && d.updatedAt == request.time
+            && ledgerOk(d.ledger);
+      }
+
+      allow read: if true;
+
+      // primo ordine della sessione: il contatore parte da 1.
+      // Da #41 la prenotazione pubblica passa dal server (Admin SDK, che bypassa
+      // le regole): l'unica scrittura client diretta è quella della CASSA, che è
+      // admin. Quindi qui si richiede isAdmin() — il default-deny non basta.
+      allow create: if isAdmin()
+                    && shapeOk(request.resource.data)
+                    && request.resource.data.seq == 1;
+
+      // ogni prenotazione avanza il contatore di ESATTAMENTE 1: serializza le
+      // scritture e impedisce di riscrivere il registro in blocco.
+      // La finestra di servizio non è più modificabile una volta fissata.
+      allow update: if isAdmin()
+                    && shapeOk(request.resource.data)
+                    && request.resource.data.seq == resource.data.seq + 1
+                    && request.resource.data.startMin == resource.data.startMin
+                    && request.resource.data.endMin == resource.data.endMin;
+
+      // azzerare il registro è un'operazione da gestionale
+      allow delete: if isAdmin();
+    }
+
+    /* -------------------------------------------------------------- ORDERS
+       Da #41 gli ordini della clientela nascono LATO SERVER (Admin SDK, che
+       bypassa queste regole) solo dopo il pagamento confermato dal webhook.
+       L'unica scrittura client diretta è quella della CASSA (admin) per gli
+       ordini al banco. Quindi create richiede isAdmin(); la forma resta
+       validata da orderOk. Leggere e modificare: solo admin. */
+    match /orders/{id} {
+
+      function orderOk(d) {
+        return d.keys().hasAll(['serviceKey','name','items','patties','windowIndex',
+                                'readyMin','mode','pay','total','code','phone',
+                                'channel','status','createdAt'])
+            && d.keys().hasOnly(['serviceKey','name','items','patties','windowIndex',
+                                 'readyMin','mode','pay','total','code','phone',
+                                 'channel','tender','status','createdAt'])
+            && d.serviceKey is string && d.serviceKey.size() >= 12 && d.serviceKey.size() <= 40
+            && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+            && d.items is list && d.items.size() > 0 && d.items.size() <= 40
+            && d.patties is int && d.patties >= 0 && d.patties <= 100
+            && d.windowIndex is int && d.windowIndex >= 0 && d.windowIndex <= 60
+            && d.readyMin is int && d.readyMin >= 0 && d.readyMin <= 1440
+            && d.mode in ['first', 'at']
+            && d.pay in ['loco', 'online']
+            && d.total is number && d.total >= 0 && d.total <= 2000
+            && d.code is int && d.code > 0 && d.code <= 100000
+            && d.phone is string && d.phone.size() <= 30
+            && d.channel in ['prenotazione', 'banco']
+            && (!('tender' in d) || d.tender in ['contanti', 'carta'])
+            && d.status == 'nuovo'
+            && d.createdAt == request.time;
+      }
+
+      allow create: if isAdmin() && orderOk(request.resource.data);
+      allow read, update, delete: if isAdmin();
+
+      /* Chiuso il buco pre-Stripe: il client non può più dichiarare da sé `pay`
+         e `total`. Gli ordini pagati online li scrive solo il webhook (Admin
+         SDK) dopo la conferma di Stripe; qui passa unicamente la cassa admin. */
+    }
+
+    /* --------------------------------------------------------------- HOLDS
+       Prenotazioni provvisorie a scadenza (#40): le scrive e legge SOLO il
+       server (Admin SDK). Nessun accesso client — esplicito, oltre al
+       default-deny, per non lasciare dubbi. */
+    match /holds/{id} {
+      allow read, write: if false;
+    }
+
+    /* ------------------------------------------------------------ SETTINGS
+       Impostazioni dell'attività (es. modalità cassa). Non servono al sito
+       cliente: le legge e scrive solo l'admin. */
+    match /settings/{doc} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
