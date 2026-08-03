@@ -15,8 +15,8 @@ import type Stripe from "stripe";
 import { adminDb, FieldValue } from "./_lib/admin.js";
 import { stripe } from "./_lib/stripe.js";
 import { HOLDS, SESSIONS, ORDERS, type Hold } from "./_lib/holds.js";
-import { serviceFromKey } from "../src/lib/schedule";
-import { totalWindows, ledgerFromMap, ledgerToMap } from "../src/lib/dispatch";
+import { serviceFromKey } from "../src/lib/schedule.js";
+import { totalWindows, ledgerFromMap, ledgerToMap } from "../src/lib/dispatch.js";
 
 export const config = { api: { bodyParser: false } };
 

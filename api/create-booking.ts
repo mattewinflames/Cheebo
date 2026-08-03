@@ -12,10 +12,10 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, FieldValue, Timestamp } from "./_lib/admin.js";
 import { stripe } from "./_lib/stripe.js";
 import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, type Hold } from "./_lib/holds.js";
-import { resolveCart, isResolveError, type BookingReq } from "../src/lib/booking";
-import { serviceFromKey } from "../src/lib/schedule";
-import { totalWindows, planFirst, planAt, ledgerFromMap, ledgerToMap, type Placement } from "../src/lib/dispatch";
-import type { MenuItem } from "../src/lib/menu";
+import { resolveCart, isResolveError, type BookingReq } from "../src/lib/booking.js";
+import { serviceFromKey } from "../src/lib/schedule.js";
+import { totalWindows, planFirst, planAt, ledgerFromMap, ledgerToMap, type Placement } from "../src/lib/dispatch.js";
+import type { MenuItem } from "../src/lib/menu.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "metodo non consentito" });

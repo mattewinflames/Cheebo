@@ -14,7 +14,7 @@ import {
   EXTRA, isPanino, isSpecialActive, cartLineOf, specialCartLine,
   cartItemStrings, cartPatties, cartTotal, cartSpecials,
   type MenuItem, type CartLine, type PaninoConfig, type CartReq,
-} from "./menu";
+} from "./menu.js";
 
 /* Una riga del carrello come la manda il client: la CONFIGURAZIONE (da menu.ts)
    più la quantità. Nessun prezzo: lo decide il server. */

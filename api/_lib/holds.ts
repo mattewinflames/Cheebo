@@ -15,7 +15,7 @@
    completare una sessione scaduta, e noi non rilasciamo prima della scadenza.
    Abbassarlo sotto i 30' reintroduce quel caso (vedi backlog).
    ========================================================================== */
-import { Timestamp } from "./admin";
+import { Timestamp } from "./admin.js";
 
 export const HOLD_MINUTES = 30;
 export const HOLDS = "holds";

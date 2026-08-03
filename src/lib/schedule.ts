@@ -2,7 +2,7 @@
    CHEEBO · Orari, sessione corrente e sessioni future
    ========================================================================== */
 
-import type { Service } from "./dispatch";
+import type { Service } from "./dispatch.js";
 
 export interface ServiceDef { label: string; start: string; end: string } // end "24:00" ammesso
 
