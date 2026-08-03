@@ -7,8 +7,8 @@
    ritiro, orario e righe. Va interrogata a intervalli finché non è "confermato".
    ========================================================================== */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { adminDb } from "./_lib/admin";
-import { HOLDS, type Hold } from "./_lib/holds";
+import { adminDb } from "./_lib/admin.js";
+import { HOLDS, type Hold } from "./_lib/holds.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "metodo non consentito" });

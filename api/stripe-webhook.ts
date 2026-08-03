@@ -12,9 +12,9 @@
    ========================================================================== */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type Stripe from "stripe";
-import { adminDb, FieldValue } from "./_lib/admin";
-import { stripe } from "./_lib/stripe";
-import { HOLDS, SESSIONS, ORDERS, type Hold } from "./_lib/holds";
+import { adminDb, FieldValue } from "./_lib/admin.js";
+import { stripe } from "./_lib/stripe.js";
+import { HOLDS, SESSIONS, ORDERS, type Hold } from "./_lib/holds.js";
 import { serviceFromKey } from "../src/lib/schedule";
 import { totalWindows, ledgerFromMap, ledgerToMap } from "../src/lib/dispatch";
 

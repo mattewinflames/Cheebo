@@ -9,9 +9,9 @@
    Nulla del prezzo arriva dal client: `resolveCart` lo ricalcola dal menù.
    ========================================================================== */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { adminDb, FieldValue, Timestamp } from "./_lib/admin";
-import { stripe } from "./_lib/stripe";
-import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, type Hold } from "./_lib/holds";
+import { adminDb, FieldValue, Timestamp } from "./_lib/admin.js";
+import { stripe } from "./_lib/stripe.js";
+import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, type Hold } from "./_lib/holds.js";
 import { resolveCart, isResolveError, type BookingReq } from "../src/lib/booking";
 import { serviceFromKey } from "../src/lib/schedule";
 import { totalWindows, planFirst, planAt, ledgerFromMap, ledgerToMap, type Placement } from "../src/lib/dispatch";
