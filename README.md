@@ -1,95 +1,158 @@
-# Cheebo — gestionale prenotazioni
+# Cheebo — prenotazioni, ordini e pagamento
 
-Web app per le prenotazioni di un burger restaurant: pagina cliente (`/`) e gestionale admin (`/admin`), con motore di smistamento **13 patty / 10 minuti** per finestra.
+Web app di **ordine-e-ritiro** per Cheebo (smashburgeria a Roma): il cliente
+compone il suo ordine, sceglie una fascia di ritiro, **paga online** e riceve un
+codice di ritiro; il personale gestisce ordini, cassa, incassi e menù da un
+pannello admin. Cuore del sistema è un motore di capacità della piastra
+(**13 patty per finestra da 10 minuti**) che rende i tempi di ritiro affidabili e
+impedisce l'overbooking.
 
-Stack: Vite + React + TypeScript + Firebase (Firestore + Auth).
-
----
-
-## Cosa c'è dentro
-
-```
-src/lib/        motore e data layer (cuore del sistema)
-  dispatch.ts   motore per-finestra (puro, testato)
-  dispatch.test.ts   suite di test degli scenari critici
-  schedule.ts   orari, sessione corrente, sessioni future (7 gg)
-  menu.ts       struttura fissa (formati, extra) + helper
-  menuStore.ts  menu su Firestore (CRUD)
-  orders.ts     prenotazione transazionale + stream realtime
-  firebase.ts   init da variabili d'ambiente
-  whatsapp.ts   messaggio e link wa.me
-src/pages/
-  Prenotazioni.tsx   pagina cliente
-  Admin.tsx          gestionale (login + Ordini + Menu)
-firestore.rules    regole di sicurezza
-scripts/seed.mjs   popola il menu
-```
+**Stack:** Vite · React 18 · TypeScript · Firebase (Firestore + Auth) · Stripe ·
+funzioni serverless su Vercel.
 
 ---
 
-## 1. Installazione
+## Cosa fa
 
-```bash
+**Cliente** (`/`) — sfoglia il menù, configura i panini (formato, menu con bibita,
+extra, rimozioni, sostituzioni), aggiunge special a disponibilità limitata,
+sceglie l'orario di ritiro, **paga con Stripe Checkout** e ottiene codice di
+ritiro, indirizzo con "come arrivare" e conferma via WhatsApp.
+
+**Admin** (`/admin`) — pannello a schede:
+- **Cassa** — POS per battere gli ordini al banco (attivabile/disattivabile dalle Opzioni).
+- **Ordini** — coda in tempo reale e occupazione della piastra.
+- **Incassi** — riepilogo con export CSV/XLSX.
+- **Menu** — editor dei prodotti (prezzi, formati, extra, flag piastra, special).
+- **Opzioni** — impostazioni dell'attività (es. modalità cassa).
+
+> La cassa e gli export **non sono documenti fiscali**: nessuna trasmissione di
+> corrispettivi. Il collegamento al registratore telematico (POS-RT) è un lavoro a parte.
+
+---
+
+## Come funziona il pagamento
+
+Il client non invia mai i prezzi, solo la **configurazione** del carrello. Il
+server è l'unico a fissare prezzi e capacità, e la conferma arriva dal webhook,
+non dal redirect del browser:
+
+1. `POST /api/create-booking` — ricalcola dal menù reale, in transazione occupa
+   piastra e stock, crea un **hold** con scadenza, apre Stripe Checkout, torna l'URL.
+2. redirect a Stripe → pagamento → redirect a `/pagamento/ok?session_id=…`.
+3. `POST /api/stripe-webhook` (**sola fonte di verità**): su
+   `checkout.session.completed` crea l'ordine e il codice di ritiro; su
+   `checkout.session.expired` rilascia lo slot.
+4. La pagina di esito fa polling di `GET /api/order-status` finché il webhook conferma.
+
+---
+
+## Struttura del progetto
+
+```
+src/
+  lib/            dominio e accesso dati
+    dispatch.ts     motore piastra (puro, testato)
+    schedule.ts     calendario dei servizi e sessioni prenotabili
+    menu.ts         modello prodotto, configuratore, carrello
+    booking.ts      resolveCart: ricalcolo autoritativo lato server (puro, testato)
+    orders.ts       prenotazione/stream Firestore + startCheckout
+    menuStore.ts    CRUD del menù
+    settings.ts     impostazioni dell'attività (settings/app)
+    export.ts       report incassi
+    firebase.ts     init Firebase + costanti del locale
+    whatsapp.ts     messaggio e link wa.me
+  pages/
+    Prenotazioni.tsx    sito cliente
+    AdminCassa.tsx      pannello admin a schede
+    EsitoPagamento.tsx  esito del pagamento con polling
+  main.tsx          router (/, /admin, /pagamento/ok, /pagamento/annullato)
+api/                funzioni serverless (Vercel + Firebase Admin + Stripe)
+  create-booking.ts  order-status.ts  stripe-webhook.ts
+  _lib/              admin.ts  stripe.ts  holds.ts
+scripts/            seed / reset / verifica-regole (girano da Node)
+firestore.rules     regole di sicurezza
+tests/rules.test.mjs test delle regole (richiede l'emulatore Firestore)
+```
+
+---
+
+## Sviluppo in locale
+
+### Prerequisiti
+- Node.js e npm
+- Un progetto Firebase (Firestore + Authentication email/password + App Check)
+- Stripe CLI (per il webhook in locale) e Vercel CLI (per servire le funzioni `/api`)
+
+### 1. Installazione
+```
 npm install
 ```
 
-## 2. Test del motore (il punto nevralgico)
-
-Non serve Firebase: il motore è puro.
-
-```bash
-npm test
+### 2. Variabili d'ambiente
+Copia il template e compila con i valori del tuo progetto:
 ```
-
-Devono passare tutti gli scenari: overflow 13→14, primo disponibile che salta le finestre piene, orario scelto rispettato o alternativa proposta, nessuna sovrapposizione, cutoff.
-
-## 3. Firebase (ambiente di test)
-
-1. Crea un progetto su <https://console.firebase.google.com> (es. `cheebo-test`).
-2. **Firestore Database** → crea database (modalità produzione va bene).
-3. **Authentication** → abilita **Email/Password** → aggiungi un utente (sarà l'admin).
-4. **Regole**: incolla il contenuto di `firestore.rules` e pubblica.
-5. Copia la config (Impostazioni progetto → SDK config) in un file `.env`:
-
-```bash
-cp .env.example .env
-# compila le VITE_FB_* e VITE_LOCALE_PHONE
+cp .env.example .env.local
 ```
+Le `VITE_*` sono pubbliche (finiscono nel bundle client). `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, `FIREBASE_SERVICE_ACCOUNT` e `APP_URL` sono **solo server**.
 
-6. Popola il menu:
+### 3. Firebase
+1. Firestore Database (modalità produzione).
+2. Authentication → Email/Password → crea l'utente admin.
+3. Pubblica le regole: `firebase deploy --only firestore:rules`.
+4. Popola il menù: `npm run seed` (richiede l'enforcement App Check temporaneamente spento).
 
-```bash
-node --env-file=.env scripts/seed.mjs
+### 4. Avvio
+Le funzioni `/api` sono servite da `vercel dev`, non dal dev server di Vite. Su
+Windows è comodo `dev.bat`, che carica le env server in sessione e avvia Vercel:
 ```
-
-## 4. Avvio in locale
-
-```bash
-npm run dev
+vercel dev            # serve app + funzioni su http://localhost:3000
 ```
-
-- Cliente:  <http://localhost:5173/>
-- Admin:    <http://localhost:5173/admin>  (login con l'utente creato al punto 3.3)
-
-## 5. La prova end-to-end
-
-1. Apri **due finestre**: una su `/`, una su `/admin`.
-2. Sull'admin scegli la sessione (es. *Oggi · Cena*).
-3. Dal cliente fai una prenotazione per la stessa sessione.
-4. L'ordine deve **comparire da solo** nell'admin (realtime), nello slot calcolato, e il box piastra deve aggiornarsi.
-5. Verifica gli scenari: riempi una finestra a 13 patty e controlla che il successivo slitti; prova "orario scelto" su una finestra piena e controlla che venga proposta l'alternativa.
-
-## 6. Build
-
-```bash
-npm run build      # type-check + build di produzione
+In una finestra separata, l'inoltro del webhook Stripe:
 ```
+stripe listen --forward-to localhost:3000/api/stripe-webhook
+```
+Prova il flusso con la carta di test `4242 4242 4242 4242`.
+
+> Nota: `vercel dev` non inietta `.env.local` nelle funzioni serverless — vanno
+> caricate nell'ambiente della shell prima dell'avvio (`dev.bat` lo fa).
 
 ---
 
-## Note
+## Test e build
 
-- **Pagamenti**: il flusso prevede *in loco* (attivo) e *Nexi* (Fase 4: serverless + webhook, da aggiungere).
-- **Soft-hold** dello slot (priorità di chi prenota prima): Fase 5, si innesta in `orders.ts`.
-- **Sicurezza**: per l'MVP la scrittura su `sessions` è aperta; in seguito si sposta l'aggiornamento del registro in una Cloud Function.
-- **Due ambienti**: questo repo è il *test*. Per la produzione, un secondo progetto Firebase + un secondo progetto Vercel con le proprie variabili (e numero WhatsApp reale solo lì).
+```
+npm test        # test unitari del dominio (non serve Firebase: il motore è puro)
+npm run build   # type-check + build di produzione
+```
+
+Il type-check delle funzioni serverless è separato:
+```
+npx tsc -p api/tsconfig.json
+```
+I test delle regole (`tests/rules.test.mjs`) richiedono l'emulatore Firestore
+(`npm run test:rules`, serve Java 11+).
+
+---
+
+## Deploy in produzione (Vercel)
+
+1. Collega il repo a un progetto Vercel; imposta le **env di produzione**.
+2. **Stripe in modalità live**: chiavi live e webhook di produzione verso
+   `https://<dominio>/api/stripe-webhook` (con il suo `whsec_`).
+3. `APP_URL` = dominio di produzione.
+4. **App Check**: aggiungi il dominio di produzione tra quelli autorizzati della
+   site key reCAPTCHA e attiva l'enforcement.
+5. Pubblica le **regole** Firestore aggiornate.
+6. Deploy e verifica un giro completo prenotazione → pagamento → ordine in cassa.
+
+---
+
+## Sicurezza
+
+- I segreti (`.env`, `.env.local`, service account) **non sono versionati**
+  (`.gitignore`); nel repo c'è solo `.env.example` con i placeholder.
+- Le scritture del cliente passano **solo dal server** (Admin SDK): le regole
+  Firestore riservano `sessions`/`orders` all'admin e `holds` è server-only.
+- Il prezzo è sempre ricalcolato lato server dal menù reale, mai fidandosi del client.
