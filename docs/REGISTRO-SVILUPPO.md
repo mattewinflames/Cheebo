@@ -45,6 +45,27 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 
 ---
 
+## 2026-08-10
+
+### #48 — Fix: gli special scaduti "retrocedevano" a panino normale
+**Tipo:** fix · **Stato:** ✅ fatto (fix a due righe; da verificare con `npm run build` prima del push)
+**File:** `src/pages/Prenotazioni.tsx`
+**Verifica:** ⚠️ build non rieseguito in questa sessione (sandbox azzerata); `isSpecialActive` resta usato (nessun import orfano)
+
+Uno special, finiti i giorni di validità, ricompariva nel menù come panino
+normale. Causa: la lista dei panini normali escludeva gli special con
+`!isSpecialActive(m, sessionKey)` — che è vero anche per uno special *scaduto*
+(non più attivo), facendolo rientrare tra gli smash/burger ordinari. Corretto
+filtrando su `!m.special` (esclude qualsiasi special, attivo o no): uno special
+attivo va nella sua card, uno scaduto/non ancora iniziato non compare da nessuna
+parte, i panini veri restano sempre visibili.
+
+**Perché:** `isSpecialActive` risponde "è attivo ORA?", mentre per decidere se un
+item è un panino normale serve "è uno special?" — due domande diverse. Il filtro
+di categoria va sulla natura dell'item (`m.special`), non sul suo stato temporale.
+
+---
+
 ## 2026-08-03
 
 ### #47 — Chiusure: blocco immediato + giorni di chiusura (Fase 1)

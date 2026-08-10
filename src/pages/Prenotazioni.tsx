@@ -213,9 +213,9 @@ export default function Prenotazioni() {
               </div>
             )}
             <Ghost t="Smashburgers" />
-            {menu.filter((m) => m.type === "smash" && !isSpecialActive(m, sessionKey)).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
+            {menu.filter((m) => m.type === "smash" && !m.special).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
             <Ghost t="Burgers" />
-            {menu.filter((m) => m.type === "burger" && !isSpecialActive(m, sessionKey)).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
+            {menu.filter((m) => m.type === "burger" && !m.special).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
             {menu.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: "16px 0" }}>Caricamento menu…</div>}
             {(["side", "dolce", "drink"] as const).map((t) => {
               const items = menu.filter((m) => m.type === t);
