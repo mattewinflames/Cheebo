@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { auth } from "../lib/firebase";
-import { upcomingSessions, resolveService, type UpcomingSession } from "../lib/schedule";
+import { upcomingSessions, resolveService, dateKey, type UpcomingSession } from "../lib/schedule";
 import { CAP, totalWindows, windowStartMin, windowEndMin, planFirst, fmt, type Service } from "../lib/dispatch";
 import { subscribeOrders, subscribeLedger, setStatus, clearSession, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
 import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore";
@@ -699,6 +699,7 @@ function OrdiniSection() {
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [filter, setFilter] = useState<"dafare" | "consegnato" | "tutti">("dafare");
   const [printOrder, setPrintOrder] = useState<Order | null>(null);
+  const [pianoEspanso, setPianoEspanso] = useState(false);
 
   useEffect(() => {
     if (!sessionKey) return;
@@ -720,9 +721,11 @@ function OrdiniSection() {
   const n = totalWindows(service);
   const fill = ledger.length ? ledger : new Array(n).fill(0);
   const lastUsed = fill.reduce((a, v, i) => (v > 0 ? i : a), -1);
-  const shown = Math.min(n, Math.max(lastUsed + 2, 5));
+  const shownBase = Math.min(n, Math.max(lastUsed + 2, 5));
+  const shown = pianoEspanso ? n : shownBase;
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  const curWi = nowMin >= service.startMin && nowMin < service.endMin ? Math.floor((nowMin - service.startMin) / 10) : -1;
+  const isToday = sessionKey.slice(0, 10) === dateKey(new Date());
+  const curWi = isToday && nowMin >= service.startMin && nowMin < service.endMin ? Math.floor((nowMin - service.startMin) / 10) : -1;
   const totalPatty = orders.reduce((s, o) => s + o.patties, 0);
   const counts = orders.reduce<Record<string, number>>((m, o) => ((m[o.status] = (m[o.status] || 0) + 1), m), {});
   const visible = orders.filter((o) => filter === "tutti" || (filter === "dafare" ? (o.status === "nuovo" || o.status === "in_consegna") : o.status === filter));
@@ -763,6 +766,12 @@ function OrdiniSection() {
                 </div>
               );
             })}
+            {n > shownBase && (
+              <button onClick={() => setPianoEspanso((v) => !v)}
+                style={{ width: "100%", marginTop: 8, background: "none", border: "none", color: C.blue, fontSize: 12.5, fontWeight: 700, cursor: "pointer", padding: "6px 0" }}>
+                {pianoEspanso ? "Comprimi" : `Mostra tutte le ${n} fasce`}
+              </button>
+            )}
           </div>
         </div>
 

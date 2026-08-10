@@ -47,6 +47,21 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 
 ## 2026-08-10
 
+### #49 — Fix badge "ORA" fantasma + fasce piastra espandibili
+**Tipo:** fix + UX · **Stato:** ✅ fatto (da verificare con `npm run build` prima del push)
+**File:** `src/pages/AdminCassa.tsx`
+**Verifica:** ⚠️ build non rieseguito qui (sandbox azzerata); riferimenti coerenti (`dateKey` importato da schedule, già esportato)
+
+Due cose nell'Occupazione piastra (scheda Ordini):
+- **Bug "ORA":** il badge della finestra corrente compariva su *qualsiasi* giorno alla stessa ora, non solo oggi. `curWi` era calcolato solo dall'orario (`nowMin` vs orari del servizio), senza guardare la data. Ora è vincolato a `isToday` (`sessionKey.slice(0,10) === dateKey(oggi)`): se il servizio selezionato non è di oggi, nessuna finestra è "ORA" (e sparisce anche la Stat "finestra corrente", giustamente).
+- **Solo i primi orari:** la lista mostrava poche fasce (`shownBase` = min 5 o fino a 2 oltre l'ultima occupata). Aggiunto un toggle "Mostra tutte le N fasce / Comprimi" (`pianoEspanso`) per vedere l'intero servizio.
+
+**Perché:** "è la finestra corrente?" è una domanda su data **e** ora, non solo ora — confrontare l'orario senza la data faceva sembrare "adesso" ogni giorno. E per un servizio lungo (es. cena) vedere solo le prime fasce nascondeva metà piastra.
+
+---
+
+## 2026-08-10
+
 ### #48 — Fix: gli special scaduti "retrocedevano" a panino normale
 **Tipo:** fix · **Stato:** ✅ fatto (fix a due righe; da verificare con `npm run build` prima del push)
 **File:** `src/pages/Prenotazioni.tsx`
