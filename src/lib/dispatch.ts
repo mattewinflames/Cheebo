@@ -43,17 +43,22 @@ export const ledgerToMap = (led: Ledger): Record<string, number> => {
 export const windowStartMin = (s: Service, w: number): number => s.startMin + w * WINDOW_MIN;
 export const windowEndMin = (s: Service, w: number): number => windowStartMin(s, w) + WINDOW_MIN;
 
-/** Posizioni libere cumulate dalla finestra 0 fino a T inclusa. */
-export function freeUpTo(ledger: Ledger, T: number): number {
+/** Posizioni libere cumulate nelle finestre [from, to] inclusi. */
+export function freeInRange(ledger: Ledger, from: number, to: number): number {
   let f = 0;
-  for (let w = 0; w <= T && w < ledger.length; w++) f += CAP - ledger[w];
+  for (let w = Math.max(0, from); w <= to && w < ledger.length; w++) f += CAP - ledger[w];
   return f;
 }
 
-/** Prima finestra in cui un ordine da `patties` può essere pronto (>= patties posti liberi fino a lì). */
-export function firstFeasibleWindow(ledger: Ledger, patties: number): number {
+/** Posizioni libere cumulate dalla finestra 0 fino a T inclusa. */
+export function freeUpTo(ledger: Ledger, T: number): number {
+  return freeInRange(ledger, 0, T);
+}
+
+/** Prima finestra (>= minWindow) in cui un ordine da `patties` può essere pronto. */
+export function firstFeasibleWindow(ledger: Ledger, patties: number, minWindow = 0): number {
   const n = ledger.length;
-  for (let T = 0; T < n; T++) if (freeUpTo(ledger, T) >= patties) return T;
+  for (let T = Math.max(0, minWindow); T < n; T++) if (freeInRange(ledger, minWindow, T) >= patties) return T;
   return -1;
 }
 
@@ -67,14 +72,15 @@ export interface Placement {
 
 const tranchesOf = (cells: number[]): number => (cells.length ? new Set(cells).size : 1);
 
-/** Primo disponibile: riempie in avanti le prime posizioni libere. */
-export function planFirst(ledger: Ledger, patties: number, s: Service): Placement {
+/** Primo disponibile: riempie in avanti le prime posizioni libere da `minWindow`. */
+export function planFirst(ledger: Ledger, patties: number, s: Service, minWindow = 0): Placement {
   const n = ledger.length;
+  const start = Math.max(0, minWindow);
   if (patties <= 0) {
-    return { ok: n > 0, windowIndex: 0, readyMin: windowEndMin(s, 0), cells: [], tranches: 1 };
+    return { ok: start < n, windowIndex: start, readyMin: windowEndMin(s, start), cells: [], tranches: 1 };
   }
   const cells: number[] = [];
-  for (let w = 0; w < n && cells.length < patties; w++) {
+  for (let w = start; w < n && cells.length < patties; w++) {
     let free = CAP - ledger[w];
     while (free-- > 0 && cells.length < patties) cells.push(w);
   }
@@ -83,14 +89,16 @@ export function planFirst(ledger: Ledger, patties: number, s: Service): Placemen
   return { ok: true, windowIndex, readyMin: windowEndMin(s, windowIndex), cells, tranches: tranchesOf(cells) };
 }
 
-/** Orario scelto: pronto ENTRO la finestra target. Riempie a ritroso da target. */
-export function planAt(ledger: Ledger, patties: number, target: number, s: Service): Placement {
+/** Orario scelto: pronto ENTRO la finestra target. Riempie a ritroso da target,
+ *  senza scendere sotto `minWindow` (le finestre già trascorse non si usano). */
+export function planAt(ledger: Ledger, patties: number, target: number, s: Service, minWindow = 0): Placement {
   const n = ledger.length;
-  if (target < 0 || target >= n) return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
+  const start = Math.max(0, minWindow);
+  if (target < start || target >= n) return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
   if (patties <= 0) return { ok: true, windowIndex: target, readyMin: windowEndMin(s, target), cells: [], tranches: 1 };
-  if (freeUpTo(ledger, target) < patties) return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
+  if (freeInRange(ledger, start, target) < patties) return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
   const cells: number[] = [];
-  for (let w = target; w >= 0 && cells.length < patties; w--) {
+  for (let w = target; w >= start && cells.length < patties; w--) {
     let free = CAP - ledger[w];
     while (free-- > 0 && cells.length < patties) cells.push(w);
   }
@@ -104,9 +112,9 @@ export function applyPlacement(ledger: Ledger, p: Placement): Ledger {
   return next;
 }
 
-/** Gli orari prenotabili per un ordine da `patties`: dalla prima finestra fattibile in poi. */
-export function bookableWindows(ledger: Ledger, patties: number): number[] {
-  const ff = firstFeasibleWindow(ledger, patties);
+/** Gli orari prenotabili per un ordine da `patties`: dalla prima finestra fattibile (>= minWindow) in poi. */
+export function bookableWindows(ledger: Ledger, patties: number, minWindow = 0): number[] {
+  const ff = firstFeasibleWindow(ledger, patties, minWindow);
   if (ff < 0) return [];
   const out: number[] = [];
   for (let T = ff; T < ledger.length; T++) out.push(T);

@@ -13,7 +13,7 @@ import { adminDb, FieldValue, Timestamp } from "./_lib/admin.js";
 import { stripe } from "./_lib/stripe.js";
 import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, type Hold } from "./_lib/holds.js";
 import { resolveCart, isResolveError, type BookingReq } from "../src/lib/booking.js";
-import { serviceFromKey } from "../src/lib/schedule.js";
+import { serviceFromKey, upcomingSessions, minWindowNow } from "../src/lib/schedule.js";
 import { totalWindows, planFirst, planAt, ledgerFromMap, ledgerToMap, type Placement } from "../src/lib/dispatch.js";
 import type { MenuItem } from "../src/lib/menu.js";
 
@@ -32,15 +32,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const service = serviceFromKey(serviceKey);
   if (!service) return res.status(400).json({ error: "sessione inesistente" });
 
-  // Chiusure (#47): il blocco vero sta qui, non nel frontend. Se le prenotazioni
-  // sono sospese, o il giorno della serviceKey è tra quelli chiusi, si rifiuta.
+  // Autorità sul tempo e sulle chiusure (#47/#50). Il server è l'ultima parola:
+  // la sessione dev'essere tra quelle REALMENTE prenotabili adesso — questo
+  // esclude in un colpo date passate, fuori range, servizi già finiti e giorni
+  // chiusi. Il blocco totale mantiene un messaggio dedicato.
+  const now = new Date();
   const settingsSnap = await adminDb.collection("settings").doc("app").get();
   const settings = settingsSnap.data() ?? {};
   if (settings.bookingBlocked === true)
     return res.status(409).json({ error: "prenotazioni sospese" });
-  const giorno = serviceKey.slice(0, 10); // "YYYY-MM-DD"
-  if (Array.isArray(settings.closedDays) && settings.closedDays.includes(giorno))
-    return res.status(409).json({ error: "giorno di chiusura" });
+  const closedDays = Array.isArray(settings.closedDays) ? (settings.closedDays as string[]) : [];
+  const prenotabili = upcomingSessions(now, undefined, { closedDays });
+  if (!prenotabili.some((u) => u.serviceKey === serviceKey))
+    return res.status(409).json({ error: "sessione non prenotabile" });
 
   // Menù reale → ricalcolo autoritativo del carrello (prezzi, patty, special).
   const menuSnap = await adminDb.collection(MENU).get();
@@ -51,6 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (isResolveError(resolved)) return res.status(400).json({ error: resolved.error });
 
   const n = totalWindows(service);
+  const minW = minWindowNow(serviceKey, service, now);
   const sessRef = adminDb.collection(SESSIONS).doc(serviceKey);
   const holdRef = adminDb.collection(HOLDS).doc();
 
@@ -76,10 +81,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let plan: Placement;
       if (mode === "at" && typeof targetWindow === "number") {
-        plan = planAt(led, resolved.patties, targetWindow, service);
-        if (!plan.ok) plan = planFirst(led, resolved.patties, service);
+        plan = planAt(led, resolved.patties, targetWindow, service, minW);
+        if (!plan.ok) plan = planFirst(led, resolved.patties, service, minW);
       } else {
-        plan = planFirst(led, resolved.patties, service);
+        plan = planFirst(led, resolved.patties, service, minW);
       }
       if (!plan.ok) return { ok: false, status: 409, error: "piastra al completo" };
 

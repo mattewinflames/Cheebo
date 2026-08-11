@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { upcomingSessions } from "../lib/schedule";
+import { upcomingSessions, minWindowNow } from "../lib/schedule";
 import {
   FORMATS, EXTRA, euro, ingredientsOf, menuDrinkSurcharge,
   cartKey, cartPrice, cartLineOf,
@@ -92,21 +92,23 @@ export default function Prenotazioni() {
   const slots = useMemo(() => {
     if (!service) return [] as { window: number; readyMin: number; full: boolean }[];
     const n = totalWindows(service);
-    const firstOk = firstFeasibleWindow(ledger, patties); // patties=0 -> 0 (nessun limite di piastra)
-    return Array.from({ length: n }, (_, w) => ({
-      window: w,
-      readyMin: windowEndMin(service, w),
-      full: firstOk < 0 || w < firstOk, // piena finché non c'è capacità cumulativa per l'ordine
-    }));
-  }, [ledger, patties, service?.startMin]);
+    const minW = minWindowNow(sessionKey, service); // scarta le finestre già passate se è oggi
+    const firstOk = firstFeasibleWindow(ledger, patties, minW); // patties=0 -> minW (nessun limite di piastra)
+    const out: { window: number; readyMin: number; full: boolean }[] = [];
+    for (let w = minW; w < n; w++) {
+      out.push({ window: w, readyMin: windowEndMin(service, w), full: firstOk < 0 || w < firstOk });
+    }
+    return out;
+  }, [ledger, patties, service?.startMin, sessionKey]);
   const firstSlot = slots.find((s) => !s.full);
 
   const preview = useMemo(() => {
     if (!service) return null;
-    if (choice === "first" || choice === null) return planFirst(ledger, patties, service);
-    const p = planAt(ledger, patties, choice.window, service);
-    return p.ok ? p : planFirst(ledger, patties, service);
-  }, [choice, ledger, patties, service?.startMin]);
+    const minW = minWindowNow(sessionKey, service);
+    if (choice === "first" || choice === null) return planFirst(ledger, patties, service, minW);
+    const p = planAt(ledger, patties, choice.window, service, minW);
+    return p.ok ? p : planFirst(ledger, patties, service, minW);
+  }, [choice, ledger, patties, service?.startMin, sessionKey]);
 
   const commit = async () => {
     if (!service || !session) return;

@@ -2,7 +2,7 @@
    CHEEBO · Orari, sessione corrente e sessioni future
    ========================================================================== */
 
-import type { Service } from "./dispatch.js";
+import { WINDOW_MIN, type Service } from "./dispatch.js";
 
 export interface ServiceDef { label: string; start: string; end: string } // end "24:00" ammesso
 
@@ -26,6 +26,16 @@ export const toMin = (hm: string): number => {
 const endToMin = (end: string): number => (end === "24:00" ? 1440 : toMin(end));
 export const dateKey = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** Prima finestra ancora utile "adesso" per una sessione: 0 se non è oggi o se
+ *  il servizio non è ancora iniziato; altrimenti scarta le finestre già trascorse
+ *  (il cibo non si cuoce nel passato). Serve a planFirst/planAt come `minWindow`. */
+export function minWindowNow(serviceKey: string, s: Pick<Service, "startMin">, now: Date = new Date()): number {
+  if (serviceKey.slice(0, 10) !== dateKey(now)) return 0;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  if (nowMin <= s.startMin) return 0;
+  return Math.floor((nowMin - s.startMin) / WINDOW_MIN);
+}
 
 export interface ActiveSession extends Service {
   serviceKey: string;

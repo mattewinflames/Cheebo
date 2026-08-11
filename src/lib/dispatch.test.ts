@@ -102,3 +102,42 @@ describe("slot prenotabili e cutoff", () => {
     expect(freeUpTo(led, 2)).toBe(12);
   });
 });
+
+// #50 — minWindow: le finestre già trascorse (oggi, servizio in corso) non si usano
+describe("minWindow · niente slot passati", () => {
+  it("planFirst salta le finestre prima di minWindow", () => {
+    // se le prime 6 finestre sono passate, il primo disponibile è la 6 (20:30)
+    const p = planFirst(emptyLedger(CENA), 3, CENA, 6);
+    expect(p.windowIndex).toBe(6);
+    expect(fmt(p.readyMin)).toBe("20:40");
+    expect(p.cells.every((w) => w >= 6)).toBe(true);
+  });
+
+  it("planFirst con patties=0 parte da minWindow, non da 0", () => {
+    const p = planFirst(emptyLedger(CENA), 0, CENA, 6);
+    expect(p.ok).toBe(true);
+    expect(p.windowIndex).toBe(6);
+    expect(fmt(p.readyMin)).toBe("20:40");
+  });
+
+  it("planAt rifiuta un target già trascorso (< minWindow)", () => {
+    const p = planAt(emptyLedger(CENA), 3, 4, CENA, 6); // target 4 è passato
+    expect(p.ok).toBe(false);
+  });
+
+  it("planAt a ritroso non scende sotto minWindow", () => {
+    const p = planAt(emptyLedger(CENA), 3, 7, CENA, 6);
+    expect(p.ok).toBe(true);
+    expect(p.cells.every((w) => w >= 6)).toBe(true);
+  });
+
+  it("firstFeasibleWindow parte da minWindow", () => {
+    expect(firstFeasibleWindow(emptyLedger(CENA), 3, 6)).toBe(6);
+  });
+
+  it("minWindow=0 (default) = comportamento invariato", () => {
+    const a = planFirst(emptyLedger(CENA), 5, CENA);
+    const b = planFirst(emptyLedger(CENA), 5, CENA, 0);
+    expect(a).toEqual(b);
+  });
+});
