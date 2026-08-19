@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "verifica-regole": "node --env-file=.env scripts/verifica-regole.mjs",
     "seed": "node --env-file=.env scripts/seed.mjs",
+    "stress:motore": "node --import tsx/esm scripts/stress-motore.mjs",
+    "stress:api": "node --env-file=.env scripts/stress-api.mjs",
     "reset": "node --env-file=.env scripts/reset.mjs",
     "pulisci-ordini": "node --env-file=.env scripts/pulisci-ordini.mjs"
   },
