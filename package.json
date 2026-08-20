@@ -14,6 +14,8 @@
     "seed": "node --env-file=.env scripts/seed.mjs",
     "stress:motore": "node --import tsx/esm scripts/stress-motore.mjs",
     "stress:api": "node --env-file=.env scripts/stress-api.mjs",
+    "stress:cleanup": "node --env-file=.env scripts/stress-cleanup.mjs",
+    "stress:check": "node --env-file=.env scripts/stress-check.mjs",
     "reset": "node --env-file=.env scripts/reset.mjs",
     "pulisci-ordini": "node --env-file=.env scripts/pulisci-ordini.mjs"
   },

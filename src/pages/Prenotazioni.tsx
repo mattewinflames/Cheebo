@@ -387,6 +387,14 @@ export default function Prenotazioni() {
           <button onClick={reset} style={{ background: "none", color: C.muted, border: "none", marginTop: 16, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>Nuova prenotazione</button>
         </div>
       )}
+      <div style={{ textAlign: "center", padding: "18px 0 14px", fontSize: 11, color: C.muted, opacity: 0.55, letterSpacing: 0.3 }}>
+        <a href="https://mattewinflamestudio.com" target="_blank" rel="noopener noreferrer"
+          style={{ color: "inherit", textDecoration: "none" }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}>
+          Built by MattewInFlames Studio
+        </a>
+      </div>
     </div>
   );
 }
