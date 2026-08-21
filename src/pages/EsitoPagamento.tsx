@@ -41,13 +41,13 @@ function dayLabelFromKey(key: string): string {
 
 export default function EsitoPagamento({ esito }: { esito: "ok" | "annullato" }) {
   const [sp] = useSearchParams();
-  const sessionId = sp.get("session_id");
+  const holdId = sp.get("hold_id") ?? sp.get("session_id"); // session_id: retrocompatibilità Stripe
   const [stato, setStato] = useState<Stato>(esito === "annullato" ? "annullato" : "loading");
   const [dati, setDati] = useState<Confermato | null>(null);
 
   useEffect(() => {
     if (esito === "annullato") return;
-    if (!sessionId) { setStato("errore"); return; }
+    if (!holdId) { setStato("errore"); return; }
 
     let alive = true;
     let tries = 0;
@@ -55,7 +55,9 @@ export default function EsitoPagamento({ esito }: { esito: "ok" | "annullato" })
 
     const poll = async () => {
       try {
-        const r = await fetch(`/api/order-status?session_id=${encodeURIComponent(sessionId)}`);
+        // hold_id per Nexi; session_id per retrocompatibilità Stripe
+        const param = holdId.startsWith("cs_") ? `session_id=${encodeURIComponent(holdId)}` : `hold_id=${encodeURIComponent(holdId)}`;
+        const r = await fetch(`/api/order-status?${param}`);
         const d = await r.json().catch(() => ({} as Record<string, unknown>));
         if (!alive) return;
         if (d?.stato === "confermato") {
@@ -81,7 +83,7 @@ export default function EsitoPagamento({ esito }: { esito: "ok" | "annullato" })
     };
     poll();
     return () => { alive = false; };
-  }, [sessionId, esito]);
+  }, [holdId, esito]);
 
   const waHref = dati
     ? waLink(buildConfirmMessage(dati.name, dayLabelFromKey(dati.serviceKey), fmt(dati.readyMin), dati.items, true, dati.code ?? undefined))

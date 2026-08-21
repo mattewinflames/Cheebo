@@ -131,7 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         actionType: "PAY",
         amount: amountCents,
         currency: "EUR",
-        resultUrl: `${appUrl}/pagamento/ok`,
+      resultUrl: `${appUrl}/pagamento/ok?hold_id=${holdRef.id}`,
         cancelUrl: `${appUrl}/pagamento/annullato?hold=${holdRef.id}`,
         notificationUrl: `${appUrl}/api/nexi-webhook`,
         language: "ita",
