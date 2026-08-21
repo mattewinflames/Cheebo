@@ -50,7 +50,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
         .griglia{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px}
         @media(max-width:980px){.cassa{grid-template-columns:1fr}.scontrino{position:static}}
         @media(max-width:860px){.cols{grid-template-columns:1fr}.piastra{position:static}}
-        .comanda-print{display:none}@media print{@page{size:80mm auto;margin:2mm 2mm}body *{visibility:hidden!important}.comanda-print{display:block!important;visibility:visible!important;position:absolute;left:0;top:0;width:76mm}.comanda-print *{visibility:visible!important}}`}</style>
+        .comanda-print{display:none}`}</style>
       <div className="screen">
         <div style={{ position: "sticky", top: 0, background: C.bg, zIndex: 6, borderBottom: `1px solid ${C.line}` }}>
           <div style={{ maxWidth: 1140, margin: "0 auto", padding: "16px 20px 0" }}>
@@ -709,7 +709,58 @@ function OrdiniSection() {
   }, [sessionKey]);
   useEffect(() => { if (service && sessionKey) return subscribeLedger(sessionKey, totalWindows(service), setLedger); }, [sessionKey, service?.startMin]);
   useEffect(() => { const after = () => setPrintOrder(null); window.addEventListener("afterprint", after); return () => window.removeEventListener("afterprint", after); }, []);
-  const doPrint = (o: Order) => { setPrintOrder(o); requestAnimationFrame(() => requestAnimationFrame(() => window.print())); };
+  const doPrint = (o: Order) => {
+    const logoUrl = `${window.location.origin}/cheebo-logo.png`;
+    const ora = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+    const euroStr = (c: number) => (c / 100).toFixed(2).replace(".", ",") + "€";
+    const dash = `<div style="border-top:1px dashed #000;margin:3mm 0"></div>`;
+    const items = o.items.map(item => {
+      const isExtra = item.startsWith("  ") || item.startsWith("+");
+      return `<div style="font-weight:${isExtra ? 400 : 700};font-size:${isExtra ? "8pt" : "10pt"};margin-bottom:${isExtra ? "0.5mm" : "2mm"};padding-left:${isExtra ? "3mm" : "0"};color:${isExtra ? "#333" : "#000"}">${item.trim()}</div>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Courier New', Courier, monospace; color: #000; width: 76mm; padding: 2mm 3mm; font-size: 9pt; line-height: 1.4; }
+  @media print { @page { size: 76mm auto; margin: 0; } body { width: 76mm; } }
+</style></head><body>
+  <div style="text-align:center;margin-bottom:2mm">
+    <img src="${logoUrl}" style="width:18mm;height:18mm;object-fit:contain;display:block;margin:0 auto 1mm">
+    <div style="font-size:8pt;letter-spacing:1px">COMANDA CUCINA</div>
+  </div>
+  ${dash}
+  <div style="text-align:center;font-weight:700;font-size:42pt;line-height:1;margin:2mm 0 1mm">#${o.code ?? "—"}</div>
+  <div style="text-align:center;font-size:7pt;letter-spacing:1px;margin-bottom:0.5mm">PRONTO ALLE</div>
+  <div style="text-align:center;font-weight:700;font-size:22pt;line-height:1;margin-bottom:2mm">${ora(o.readyMin)}</div>
+  ${dash}
+  <div style="display:flex;justify-content:space-between;margin-bottom:1mm">
+    <span style="font-size:8pt">Cliente</span>
+    <strong style="font-size:10pt">${o.name.toUpperCase()}</strong>
+  </div>
+  ${o.phone ? `<div style="display:flex;justify-content:space-between;margin-bottom:1mm"><span style="font-size:8pt">Tel</span><strong style="font-size:9pt">${o.phone}</strong></div>` : ""}
+  ${dash}
+  ${items}
+  ${dash}
+  <div style="display:flex;justify-content:space-between;font-weight:700;font-size:10pt;margin-bottom:1mm">
+    <span>TOTALE</span><span>${euroStr(o.total ?? 0)}</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;font-size:8pt">
+    <span>Pagamento</span><strong>${o.pay === "online" ? "✓ PAGATO" : "IN LOCO"}</strong>
+  </div>
+  ${dash}
+  <div style="text-align:center;font-size:7pt;color:#555">Bite the East Side · La Rustica</div>
+</body></html>`;
+
+    const w = window.open("", "_blank", "width=320,height=600,toolbar=0,menubar=0,scrollbars=0");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.onload = () => { w.print(); w.onafterprint = () => w.close(); };
+    // fallback se onload non scatta (immagine già in cache)
+    setTimeout(() => { if (!w.closed) { w.print(); w.onafterprint = () => w.close(); } }, 400);
+  };
   const [clearing, setClearing] = useState(false);
   const doClear = async () => {
     if (!window.confirm(`Cancellare TUTTI gli ordini di "${session?.dayLabel} ${session?.label}" e azzerare la piastra?\n\nOperazione di test, non reversibile.`)) return;
