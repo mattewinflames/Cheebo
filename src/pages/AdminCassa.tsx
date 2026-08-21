@@ -50,7 +50,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
         .griglia{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px}
         @media(max-width:980px){.cassa{grid-template-columns:1fr}.scontrino{position:static}}
         @media(max-width:860px){.cols{grid-template-columns:1fr}.piastra{position:static}}
-        .comanda-print{display:none}@media print{body *{visibility:hidden!important}.comanda-print{display:block!important;visibility:visible!important;position:absolute;left:0;top:0;width:100%}.comanda-print *{visibility:visible!important}}`}</style>
+        .comanda-print{display:none}@media print{body *{visibility:hidden!important}.comanda-print{display:block!important;visibility:visible!important;position:absolute;left:0;top:0;width:76mm}.comanda-print *{visibility:visible!important}}`}</style>
       <div className="screen">
         <div style={{ position: "sticky", top: 0, background: C.bg, zIndex: 6, borderBottom: `1px solid ${C.line}` }}>
           <div style={{ maxWidth: 1140, margin: "0 auto", padding: "16px 20px 0" }}>
@@ -818,18 +818,60 @@ function OrdiniSection() {
 
       <div className="comanda-print">
         {printOrder && (
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", color: "#000", maxWidth: 300, padding: 14, fontSize: 13, lineHeight: 1.5 }}>
-            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 16, letterSpacing: 1 }}>CHEEBO</div>
-            <div style={{ textAlign: "center", fontSize: 11 }}>COMANDA CUCINA</div>
-            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 26, margin: "4px 0" }}>RITIRO #{printOrder.code ?? "—"}</div><Dash />
-            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Cliente:</span><strong>{printOrder.name.toUpperCase()}</strong></div>
-            {printOrder.phone && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Tel:</span><strong>{printOrder.phone}</strong></div>}
-            <div style={{ display: "flex", justifyContent: "space-between" }}><span>Pronto:</span><strong style={{ fontSize: 18 }}>{fmt(printOrder.readyMin)}</strong></div><Dash />
-            {printOrder.items.map((i, k) => <div key={k} style={{ fontWeight: 700, marginBottom: 4 }}>{i}</div>)}<Dash />
-            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700 }}><span>PATTY TOTALI</span><span>{printOrder.patties}</span></div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 15, marginTop: 4 }}><span>TOTALE</span><span>{euro(printOrder.total ?? 0)}</span></div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}><span>Pagamento:</span><strong>{printOrder.pay === "online" ? "PAGATO" : "IN LOCO"}</strong></div><Dash />
-            <div style={{ textAlign: "center", fontSize: 10 }}>Bite the East Side · La Rustica</div>
+          <div style={{ fontFamily: "'Courier New', Courier, monospace", color: "#000", width: "76mm", padding: "6px 8px", fontSize: 12, lineHeight: 1.5 }}>
+            {/* Intestazione */}
+            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 15, letterSpacing: 2 }}>CHEEBO</div>
+            <div style={{ textAlign: "center", fontSize: 10, marginBottom: 2 }}>COMANDA CUCINA</div>
+            <Dash />
+            {/* Codice ritiro — elemento dominante */}
+            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 52, lineHeight: 1, margin: "4px 0 2px" }}>
+              #{printOrder.code ?? "—"}
+            </div>
+            {/* Orario — secondo per importanza */}
+            <div style={{ textAlign: "center", fontSize: 10, letterSpacing: 1, marginBottom: 1 }}>PRONTO ALLE</div>
+            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 28, lineHeight: 1, marginBottom: 4 }}>
+              {fmt(printOrder.readyMin)}
+            </div>
+            <Dash />
+            {/* Cliente */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+              <span style={{ fontSize: 10 }}>Cliente</span>
+              <strong style={{ fontSize: 13 }}>{printOrder.name.toUpperCase()}</strong>
+            </div>
+            {printOrder.phone && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                <span style={{ fontSize: 10 }}>Tel</span>
+                <strong>{printOrder.phone}</strong>
+              </div>
+            )}
+            <Dash />
+            {/* Voci ordine */}
+            {printOrder.items.map((item, k) => {
+              const isExtra = item.startsWith("  ") || item.startsWith("+");
+              return (
+                <div key={k} style={{
+                  fontWeight: isExtra ? 400 : 700,
+                  fontSize: isExtra ? 11 : 13,
+                  marginBottom: isExtra ? 1 : 5,
+                  paddingLeft: isExtra ? 8 : 0,
+                  color: isExtra ? "#333" : "#000",
+                }}>
+                  {item.trim()}
+                </div>
+              );
+            })}
+            <Dash />
+            {/* Totale e pagamento */}
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 13, marginBottom: 2 }}>
+              <span>TOTALE</span><span>{euro(printOrder.total ?? 0)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+              <span>Pagamento</span>
+              <strong>{printOrder.pay === "online" ? "✓ PAGATO" : "IN LOCO"}</strong>
+            </div>
+            <Dash />
+            {/* Footer */}
+            <div style={{ textAlign: "center", fontSize: 9, color: "#555" }}>Bite the East Side · La Rustica</div>
           </div>
         )}
       </div>
