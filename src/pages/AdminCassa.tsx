@@ -709,57 +709,25 @@ function OrdiniSection() {
   }, [sessionKey]);
   useEffect(() => { if (service && sessionKey) return subscribeLedger(sessionKey, totalWindows(service), setLedger); }, [sessionKey, service?.startMin]);
   useEffect(() => { const after = () => setPrintOrder(null); window.addEventListener("afterprint", after); return () => window.removeEventListener("afterprint", after); }, []);
-  const doPrint = (o: Order) => {
-    const logoUrl = `${window.location.origin}/cheebo-logo.png`;
-    const ora = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
-    const euroStr = (c: number) => (c / 100).toFixed(2).replace(".", ",") + "€";
-    const dash = `<div style="border-top:1px dashed #000;margin:3mm 0"></div>`;
-    const items = o.items.map(item => {
-      const isExtra = item.startsWith("  ") || item.startsWith("+");
-      return `<div style="font-weight:${isExtra ? 400 : 700};font-size:${isExtra ? "8pt" : "10pt"};margin-bottom:${isExtra ? "0.5mm" : "2mm"};padding-left:${isExtra ? "3mm" : "0"};color:${isExtra ? "#333" : "#000"}">${item.trim()}</div>`;
-    }).join("");
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', Courier, monospace; color: #000; width: 76mm; padding: 2mm 3mm; font-size: 9pt; line-height: 1.4; }
-  @media print { @page { size: 76mm auto; margin: 0; } body { width: 76mm; } }
-</style></head><body>
-  <div style="text-align:center;margin-bottom:2mm">
-    <img src="${logoUrl}" style="width:18mm;height:18mm;object-fit:contain;display:block;margin:0 auto 1mm">
-    <div style="font-size:8pt;letter-spacing:1px">COMANDA CUCINA</div>
-  </div>
-  ${dash}
-  <div style="text-align:center;font-weight:700;font-size:42pt;line-height:1;margin:2mm 0 1mm">#${o.code ?? "—"}</div>
-  <div style="text-align:center;font-size:7pt;letter-spacing:1px;margin-bottom:0.5mm">PRONTO ALLE</div>
-  <div style="text-align:center;font-weight:700;font-size:22pt;line-height:1;margin-bottom:2mm">${ora(o.readyMin)}</div>
-  ${dash}
-  <div style="display:flex;justify-content:space-between;margin-bottom:1mm">
-    <span style="font-size:8pt">Cliente</span>
-    <strong style="font-size:10pt">${o.name.toUpperCase()}</strong>
-  </div>
-  ${o.phone ? `<div style="display:flex;justify-content:space-between;margin-bottom:1mm"><span style="font-size:8pt">Tel</span><strong style="font-size:9pt">${o.phone}</strong></div>` : ""}
-  ${dash}
-  ${items}
-  ${dash}
-  <div style="display:flex;justify-content:space-between;font-weight:700;font-size:10pt;margin-bottom:1mm">
-    <span>TOTALE</span><span>${euroStr(o.total ?? 0)}</span>
-  </div>
-  <div style="display:flex;justify-content:space-between;font-size:8pt">
-    <span>Pagamento</span><strong>${o.pay === "online" ? "✓ PAGATO" : "IN LOCO"}</strong>
-  </div>
-  ${dash}
-  <div style="text-align:center;font-size:7pt;color:#555">Bite the East Side · La Rustica</div>
-</body></html>`;
-
-    const w = window.open("", "_blank", "width=320,height=600,toolbar=0,menubar=0,scrollbars=0");
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    w.onload = () => { w.print(); w.onafterprint = () => w.close(); };
-    // fallback se onload non scatta (immagine già in cache)
-    setTimeout(() => { if (!w.closed) { w.print(); w.onafterprint = () => w.close(); } }, 400);
+  const [printing, setPrinting] = useState<string | null>(null); // orderId in corso
+  const doPrint = async (o: Order) => {
+    if (!o.id) return;
+    setPrinting(o.id);
+    try {
+      const r = await fetch(`/api/comanda-pdf?order_id=${encodeURIComponent(o.id)}`);
+      if (!r.ok) { alert("Errore generazione PDF"); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `comanda-${o.code ?? o.id.slice(0, 6)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Errore download comanda");
+    } finally {
+      setPrinting(null);
+    }
   };
   const [clearing, setClearing] = useState(false);
   const doClear = async () => {
@@ -857,7 +825,7 @@ function OrdiniSection() {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button onClick={() => doPrint(o)} style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6 }}><Printer size={15} /> Stampa comanda</button>
+                    <button onClick={() => doPrint(o)} disabled={printing === o.id} style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6, opacity: printing === o.id ? 0.6 : 1 }}><Printer size={15} /> {printing === o.id ? "Generando…" : "Stampa comanda"}</button>
                     {st.next && <button onClick={() => setStatus(o.id, st.next!)} style={{ ...btn("primary"), flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{o.status === "in_consegna" ? <Check size={15} /> : <ChevronRight size={15} />} {st.action}</button>}
                   </div>
                 </div>
