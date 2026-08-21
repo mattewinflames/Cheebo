@@ -50,7 +50,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
         .griglia{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px}
         @media(max-width:980px){.cassa{grid-template-columns:1fr}.scontrino{position:static}}
         @media(max-width:860px){.cols{grid-template-columns:1fr}.piastra{position:static}}
-        .comanda-print{display:none}@media print{@page{size:80mm 200mm;margin:0}body *{visibility:hidden!important}.comanda-print{display:block!important;visibility:visible!important;position:absolute;left:0;top:0;width:76mm;padding:4px}.comanda-print *{visibility:visible!important}}`}</style>
+        .comanda-print{display:none}@media print{@page{size:80mm auto;margin:2mm 2mm}body *{visibility:hidden!important}.comanda-print{display:block!important;visibility:visible!important;position:absolute;left:0;top:0;width:76mm}.comanda-print *{visibility:visible!important}}`}</style>
       <div className="screen">
         <div style={{ position: "sticky", top: 0, background: C.bg, zIndex: 6, borderBottom: `1px solid ${C.line}` }}>
           <div style={{ maxWidth: 1140, margin: "0 auto", padding: "16px 20px 0" }}>
@@ -818,30 +818,36 @@ function OrdiniSection() {
 
       <div className="comanda-print">
         {printOrder && (
-          <div style={{ fontFamily: "'Courier New', Courier, monospace", color: "#000", width: "76mm", padding: "6px 8px", fontSize: 12, lineHeight: 1.5 }}>
-            {/* Intestazione */}
-            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 15, letterSpacing: 2 }}>CHEEBO</div>
-            <div style={{ textAlign: "center", fontSize: 10, marginBottom: 2 }}>COMANDA CUCINA</div>
+          <div style={{ fontFamily: "'Courier New', Courier, monospace", color: "#000", width: "76mm", padding: "2mm 3mm", fontSize: "9pt", lineHeight: 1.4 }}>
+            {/* Logo + Intestazione */}
+            <div style={{ textAlign: "center", marginBottom: "1mm" }}>
+              <img
+                src="/cheebo-logo.png"
+                alt="Cheebo"
+                style={{ width: "18mm", height: "18mm", objectFit: "contain", display: "block", margin: "0 auto 2mm" }}
+              />
+              <div style={{ fontSize: "8pt", letterSpacing: 1 }}>COMANDA CUCINA</div>
+            </div>
             <Dash />
             {/* Codice ritiro — elemento dominante */}
-            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 52, lineHeight: 1, margin: "4px 0 2px" }}>
+            <div style={{ textAlign: "center", fontWeight: 700, fontSize: "42pt", lineHeight: 1, margin: "2mm 0 1mm" }}>
               #{printOrder.code ?? "—"}
             </div>
             {/* Orario — secondo per importanza */}
-            <div style={{ textAlign: "center", fontSize: 10, letterSpacing: 1, marginBottom: 1 }}>PRONTO ALLE</div>
-            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 28, lineHeight: 1, marginBottom: 4 }}>
+            <div style={{ textAlign: "center", fontSize: "7pt", letterSpacing: 1, marginBottom: "0.5mm" }}>PRONTO ALLE</div>
+            <div style={{ textAlign: "center", fontWeight: 700, fontSize: "22pt", lineHeight: 1, marginBottom: "2mm" }}>
               {fmt(printOrder.readyMin)}
             </div>
             <Dash />
             {/* Cliente */}
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-              <span style={{ fontSize: 10 }}>Cliente</span>
-              <strong style={{ fontSize: 13 }}>{printOrder.name.toUpperCase()}</strong>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1mm" }}>
+              <span style={{ fontSize: "8pt" }}>Cliente</span>
+              <strong style={{ fontSize: "10pt" }}>{printOrder.name.toUpperCase()}</strong>
             </div>
             {printOrder.phone && (
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                <span style={{ fontSize: 10 }}>Tel</span>
-                <strong>{printOrder.phone}</strong>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1mm" }}>
+                <span style={{ fontSize: "8pt" }}>Tel</span>
+                <strong style={{ fontSize: "9pt" }}>{printOrder.phone}</strong>
               </div>
             )}
             <Dash />
@@ -851,9 +857,9 @@ function OrdiniSection() {
               return (
                 <div key={k} style={{
                   fontWeight: isExtra ? 400 : 700,
-                  fontSize: isExtra ? 11 : 13,
-                  marginBottom: isExtra ? 1 : 5,
-                  paddingLeft: isExtra ? 8 : 0,
+                  fontSize: isExtra ? "8pt" : "10pt",
+                  marginBottom: isExtra ? "0.5mm" : "2mm",
+                  paddingLeft: isExtra ? "3mm" : 0,
                   color: isExtra ? "#333" : "#000",
                 }}>
                   {item.trim()}
@@ -862,16 +868,16 @@ function OrdiniSection() {
             })}
             <Dash />
             {/* Totale e pagamento */}
-            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 13, marginBottom: 2 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: "10pt", marginBottom: "1mm" }}>
               <span>TOTALE</span><span>{euro(printOrder.total ?? 0)}</span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8pt" }}>
               <span>Pagamento</span>
               <strong>{printOrder.pay === "online" ? "✓ PAGATO" : "IN LOCO"}</strong>
             </div>
             <Dash />
             {/* Footer */}
-            <div style={{ textAlign: "center", fontSize: 9, color: "#555" }}>Bite the East Side · La Rustica</div>
+            <div style={{ textAlign: "center", fontSize: "7pt", color: "#555" }}>Bite the East Side · La Rustica</div>
           </div>
         )}
       </div>
