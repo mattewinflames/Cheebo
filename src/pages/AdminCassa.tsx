@@ -50,7 +50,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
         .griglia{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px}
         @media(max-width:980px){.cassa{grid-template-columns:1fr}.scontrino{position:static}}
         @media(max-width:860px){.cols{grid-template-columns:1fr}.piastra{position:static}}
-        .comanda-print{display:none}@media print{body *{visibility:hidden!important}.comanda-print{display:block!important;visibility:visible!important;position:absolute;left:0;top:0;width:76mm}.comanda-print *{visibility:visible!important}}`}</style>
+        .comanda-print{display:none}@media print{@page{size:80mm 200mm;margin:0}body *{visibility:hidden!important}.comanda-print{display:block!important;visibility:visible!important;position:absolute;left:0;top:0;width:76mm;padding:4px}.comanda-print *{visibility:visible!important}}`}</style>
       <div className="screen">
         <div style={{ position: "sticky", top: 0, background: C.bg, zIndex: 6, borderBottom: `1px solid ${C.line}` }}>
           <div style={{ maxWidth: 1140, margin: "0 auto", padding: "16px 20px 0" }}>
