@@ -15,8 +15,8 @@ const MM = 2.8346; // 1mm in pt
 function ora(min: number) {
   return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 }
-function euroStr(centesimi: number) {
-  return (centesimi / 100).toFixed(2).replace(".", ",") + "€";
+function euroStr(euro: number) {
+  return euro.toFixed(2).replace(".", ",") + "€";
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
