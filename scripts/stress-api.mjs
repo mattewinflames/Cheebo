@@ -33,28 +33,46 @@ import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 // -------------------------------------------------------------------
 // Configurazione
 // -------------------------------------------------------------------
-const API_URL      = process.env.STRESS_API_URL ?? "http://localhost:3000";
+const API_URL      = process.env.STRESS_API_URL ?? "https://cheebo-iota.vercel.app";
 const N_RICHIESTE  = Number(process.argv[2] ?? 20);
 const PATTY_ORD    = Number(process.argv[3] ?? 2);
 const CONCORRENZA  = Number(process.argv[4] ?? 5);
 const CAP          = 13;
 const SEP          = "─".repeat(60);
 
+// Data target: usa una data futura lontana per non interferire
+// con le prenotazioni reali. Modifica se vuoi una data diversa.
+const TARGET_DATE  = process.env.STRESS_DATE ?? (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 30); // 30 giorni nel futuro
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+})();
+
 // Calcola la serviceKey per OGGI (stesso formato del codice)
 function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-function serviceKeyOggi() {
-  const now = new Date();
-  const ora = now.getHours() * 60 + now.getMinutes();
-  // Tenta "Cena" (19:30-22:30) poi "Pranzo" (12:30-14:30)
-  const SERVIZI = [
-    { label: "Cena",   startMin: 19 * 60 + 30, endMin: 22 * 60 + 30 },
-    { label: "Pranzo", startMin: 12 * 60 + 30, endMin: 14 * 60 + 30 },
-  ];
-  // Usa il prossimo servizio non ancora finito
-  const s = SERVIZI.find((sv) => ora < sv.endMin) ?? SERVIZI[0];
-  return `${dateKey(now)}-${s.label}`;
+function serviceKeyTarget() {
+  // Trova il prossimo giorno in cui c'è un servizio, partendo da TARGET_DATE
+  const SCHEDULE = {
+    0: [{ label: "Cena",   startMin: 19 * 60 + 30, endMin: 22 * 60 + 30 }],
+    1: [],
+    2: [{ label: "Cena", startMin: 19 * 60 + 30, endMin: 22 * 60 + 30 }],
+    3: [{ label: "Cena", startMin: 19 * 60 + 30, endMin: 22 * 60 + 30 }],
+    4: [{ label: "Cena", startMin: 19 * 60 + 30, endMin: 22 * 60 + 30 }],
+    5: [{ label: "Cena", startMin: 19 * 60 + 30, endMin: 24 * 60 }],
+    6: [{ label: "Cena", startMin: 19 * 60 + 30, endMin: 24 * 60 }],
+  };
+  const [y, m, d] = TARGET_DATE.split("-").map(Number);
+  for (let off = 0; off < 7; off++) {
+    const date = new Date(y, m - 1, d + off);
+    const defs = SCHEDULE[date.getDay()] ?? [];
+    if (defs.length > 0) {
+      const dk = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+      return `${dk}-${defs[0].label}`;
+    }
+  }
+  return `${TARGET_DATE}-Cena`; // fallback
 }
 
 // -------------------------------------------------------------------
@@ -81,7 +99,7 @@ function makePayload(serviceKey) {
     phone: "",
     mode: "first",
     cart: [
-      { itemId: "classic", kind: "panino", formatId: "solo", qty: PATTY_ORD, removes: [], swaps: [] },
+      { itemId: "classic", kind: "panino", format: "singolo", type: "solo", qty: PATTY_ORD, removes: [], swaps: [] },
     ],
   };
 }
@@ -158,7 +176,7 @@ try {
   process.exit(1);
 }
 
-const serviceKey = serviceKeyOggi();
+const serviceKey = serviceKeyTarget();
 console.log(`\n   API           : ${API_URL}`);
 console.log(`   ServiceKey    : ${serviceKey}`);
 console.log(`   Richieste     : ${N_RICHIESTE}`);

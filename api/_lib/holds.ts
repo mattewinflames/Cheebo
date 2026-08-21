@@ -2,18 +2,17 @@
    CHEEBO · Hold di prenotazione (collezione server-only `holds`)
    ----------------------------------------------------------------------------
    Un hold è la PRENOTAZIONE PROVVISORIA che tiene lo slot di piastra (e i pezzi
-   di special) mentre il cliente è sul Checkout Stripe. Vive solo lato server:
+   di special) mentre il cliente è sul Checkout Nexi XPay. Vive solo lato server:
    nessun client la legge o la scrive (default-deny delle regole).
 
    Ciclo di vita:
      attesa  → creato da /api/create-booking, occupa ledger+stock, ha `expiresAt`
-     pagato  → il webhook `checkout.session.completed` crea l'ordine vero e lo chiude
-     scaduto → il webhook `checkout.session.expired` rilascia ledger+stock
+     pagato  → il webhook nexi-webhook (AUTHORIZED/EXECUTED) crea l'ordine vero
+     scaduto → il webhook nexi-webhook (CANCELED/DECLINED/FAILED) rilascia slot
 
-   ⚠️ `HOLD_MINUTES` è allineato alla scadenza della sessione Stripe (minimo 30').
-   Tenerlo uguale evita il caso "pagato dopo il rilascio": Stripe non lascia
-   completare una sessione scaduta, e noi non rilasciamo prima della scadenza.
-   Abbassarlo sotto i 30' reintroduce quel caso (vedi backlog).
+   ⚠️ `HOLD_MINUTES` è allineato alla durata tipica della sessione HPP Nexi.
+   A differenza di Stripe (scadenza esplicita), Nexi invia CANCELED quando il
+   cliente abbandona la pagina di pagamento.
    ========================================================================== */
 import { Timestamp } from "./admin.js";
 
@@ -38,7 +37,11 @@ export interface Hold {
   items: string[];
   total: number;
   status: HoldStatus;
-  stripeSessionId?: string;
+  // Campi Nexi XPay
+  nexiOrderId?: string;               // holdRef.id.slice(0,18) — chiave per trovare l'hold dal webhook
+  nexiSecurityToken?: string;         // token per validare autenticità della notifica Nexi
+  nexiCorrelationId?: string;         // UUID della richiesta HPP (per debug)
+  nexiOperationId?: string;           // ID operazione Nexi (dopo conferma pagamento)
   orderId?: string;
   code?: number;
   expiresAt: Timestamp;

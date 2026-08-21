@@ -1,4 +1,15 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "holds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "nexiOrderId",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

@@ -1,16 +1,17 @@
 /* ============================================================================
    POST /api/create-booking
    ----------------------------------------------------------------------------
-   Sposta la prenotazione LATO SERVER (chiude #30). In una transazione Admin:
-   valida lo special, pianifica lo slot, occupa ledger+stock e crea un HOLD con
-   scadenza. Poi apre una sessione di Stripe Checkout e restituisce l'URL.
+   Sposta la prenotazione LATO SERVER. In una transazione Admin:
+   valida lo special, pianifica lo slot, occupa ledger+stock e crea un HOLD.
+   Poi apre una sessione Nexi XPay HPP e restituisce l'URL di pagamento.
    Il codice di ritiro NON si assegna qui: lo assegna il webhook a pagamento
    avvenuto, così gli abbandoni non bruciano numeri di ritiro.
    Nulla del prezzo arriva dal client: `resolveCart` lo ricalcola dal menù.
    ========================================================================== */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { randomUUID } from "crypto";
 import { adminDb, FieldValue, Timestamp } from "./_lib/admin.js";
-import { stripe } from "./_lib/stripe.js";
+import { createHppOrder } from "./_lib/nexi.js";
 import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, type Hold } from "./_lib/holds.js";
 import { resolveCart, isResolveError, type BookingReq } from "../src/lib/booking.js";
 import { serviceFromKey, upcomingSessions, minWindowNow } from "../src/lib/schedule.js";
@@ -32,10 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const service = serviceFromKey(serviceKey);
   if (!service) return res.status(400).json({ error: "sessione inesistente" });
 
-  // Autorità sul tempo e sulle chiusure (#47/#50). Il server è l'ultima parola:
-  // la sessione dev'essere tra quelle REALMENTE prenotabili adesso — questo
-  // esclude in un colpo date passate, fuori range, servizi già finiti e giorni
-  // chiusi. Il blocco totale mantiene un messaggio dedicato.
+  // Autorità sul tempo e sulle chiusure (#47/#50).
   const now = new Date();
   const settingsSnap = await adminDb.collection("settings").doc("app").get();
   const settings = settingsSnap.data() ?? {};
@@ -46,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!prenotabili.some((u) => u.serviceKey === serviceKey))
     return res.status(409).json({ error: "sessione non prenotabile" });
 
-  // Menù reale → ricalcolo autoritativo del carrello (prezzi, patty, special).
+  // Menù reale → ricalcolo autoritativo del carrello.
   const menuSnap = await adminDb.collection(MENU).get();
   const menu = menuSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
   const byId = new Map(menu.map((m) => [m.id, m] as const));
@@ -73,7 +71,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const led = ledgerFromMap(data?.ledger as Record<string, number> | undefined, n);
       const stock: Record<string, number> = { ...((data?.stock as Record<string, number> | undefined) ?? {}) };
 
-      // Disponibilità special ricontrollata sul registro reale (non sul client).
       for (const [id, qty] of Object.entries(resolved.specials)) {
         const remaining = stock[id] ?? specialBase(id);
         if (remaining < qty) return { ok: false, status: 409, error: "special esaurito", itemId: id, left: remaining };
@@ -99,7 +96,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const hold: Hold = {
         serviceKey, cells: plan.cells, specials: resolved.specials, patties: resolved.patties,
         windowIndex: plan.windowIndex, readyMin: plan.readyMin, mode: mode as "first" | "at",
-        name: name.trim(), phone: typeof phone === "string" ? phone.replace(/\D/g, "") : "", items: resolved.items, total: resolved.total,
+        name: name.trim(), phone: typeof phone === "string" ? phone.replace(/\D/g, "") : "",
+        items: resolved.items, total: resolved.total,
         status: "attesa", expiresAt: Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60_000),
         createdAt: FieldValue.serverTimestamp(),
       };
@@ -113,26 +111,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!out.ok) return res.status(out.status).json({ error: out.error, itemId: out.itemId, left: out.left });
 
-  // Sessione Stripe. La conferma vera arriva dal webhook, non dal redirect.
+  // Sessione Nexi XPay HPP.
+  // L'importo va in centesimi come stringa (es. 1550 per 15.50 EUR).
   const appUrl = process.env.APP_URL ?? `https://${req.headers.host ?? ""}`;
+  const nexiOrderId = holdRef.id.slice(0, 18); // max 18 caratteri per Nexi
+  const amountCents = String(Math.round(resolved.total * 100));
+  const correlationId = randomUUID();
+
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: resolved.stripeLineItems.map((li) => ({
-        price_data: { currency: "eur", unit_amount: li.amount, product_data: { name: li.name } },
-        quantity: li.qty,
-      })),
-      success_url: `${appUrl}/pagamento/ok?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/pagamento/annullato?hold=${holdRef.id}`,
-      expires_at: Math.floor(Date.now() / 1000) + HOLD_MINUTES * 60,
-      metadata: { holdId: holdRef.id, serviceKey },
+    const nexiRes = await createHppOrder({
+      order: {
+        orderId: nexiOrderId,
+        amount: amountCents,
+        currency: "EUR",
+        description: `Cheebo — ${resolved.items.length} prodott${resolved.items.length === 1 ? "o" : "i"}`,
+        customField: holdRef.id, // holdId completo nel campo libero (max 255 char)
+      },
+      paymentSession: {
+        actionType: "PAY",
+        amount: amountCents,
+        currency: "EUR",
+        resultUrl: `${appUrl}/pagamento/ok`,
+        cancelUrl: `${appUrl}/pagamento/annullato?hold=${holdRef.id}`,
+        notificationUrl: `${appUrl}/api/nexi-webhook`,
+        language: "ita",
+      },
+    }, correlationId);
+
+    // Salviamo nexiOrderId e securityToken sull'hold per validare il webhook.
+    await holdRef.update({
+      nexiOrderId,
+      nexiSecurityToken: nexiRes.securityToken,
+      nexiCorrelationId: correlationId,
     });
-    await holdRef.update({ stripeSessionId: session.id });
-    return res.status(200).json({ url: session.url, holdId: holdRef.id });
+
+    return res.status(200).json({ url: nexiRes.hostedPage, holdId: holdRef.id });
   } catch (e) {
-    // La sessione non è partita: l'hold resta appeso e verrà rilasciato alla
-    // scadenza. Meglio così che tenere il cliente su un checkout inesistente.
-    console.error("[create-booking] stripe", e);
+    console.error("[create-booking] nexi", e);
     return res.status(502).json({ error: "pagamento non avviabile, riprova" });
   }
 }
