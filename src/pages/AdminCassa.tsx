@@ -751,7 +751,7 @@ function OrdiniSection() {
     if (!o.id) return;
     setPrinting(o.id);
     try {
-      const r = await fetch(`/api/comanda-pdf?order_id=${encodeURIComponent(o.id)}`);
+      const r = await fetch(`/api/comanda-txt?order_id=${encodeURIComponent(o.id)}`);
       if (!r.ok) { alert("Errore generazione PDF"); return; }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
