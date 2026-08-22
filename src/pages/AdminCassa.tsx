@@ -720,7 +720,7 @@ function OrdiniSection() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `comanda-${o.code ?? o.id.slice(0, 6)}.pdf`;
+      a.download = `comanda-${o.code ?? o.id.slice(0, 6)}.txt`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
