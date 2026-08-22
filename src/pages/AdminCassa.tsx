@@ -227,6 +227,43 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
           <div style={{ fontSize: 12.5, color: C.muted, marginTop: 16 }}>Nessun giorno di chiusura impostato.</div>
         )}
       </div>
+
+      {/* Costo servizio di prenotazione */}
+      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 10 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Costo servizio di prenotazione</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>
+              Importo fisso aggiunto a ogni prenotazione online (es. 0,50€). Appare come voce separata nel riepilogo del cliente.
+            </div>
+          </div>
+          <button
+            onClick={() => toggle({ costoServizioAttivo: !settings.costoServizioAttivo })}
+            disabled={busy}
+            style={{ flexShrink: 0, width: 44, height: 26, borderRadius: 13, border: "none", cursor: busy ? "default" : "pointer",
+              background: settings.costoServizioAttivo ? C.blue : C.line, position: "relative", transition: "background .2s" }}>
+            <span style={{ position: "absolute", top: 3, left: settings.costoServizioAttivo ? 21 : 3,
+              width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+          </button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 13, color: C.muted, whiteSpace: "nowrap" }}>Importo (€)</span>
+          <input
+            type="number" min="0" step="0.01"
+            value={settings.costoServizio ?? 0}
+            disabled={busy}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              if (!isNaN(v) && v >= 0) toggle({ costoServizio: Math.round(v * 100) / 100 });
+            }}
+            style={{ width: 90, border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 10px",
+              fontSize: 14, fontWeight: 600, background: busy ? C.bg : "#fff" }}
+          />
+          <span style={{ fontSize: 12, color: settings.costoServizioAttivo ? C.blue : C.muted, fontWeight: 600 }}>
+            {settings.costoServizioAttivo ? "ATTIVO" : "NON ATTIVO"}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

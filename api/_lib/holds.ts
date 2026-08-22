@@ -36,6 +36,7 @@ export interface Hold {
   phone: string;
   items: string[];
   total: number;
+  serviceCharge: number;
   status: HoldStatus;
   // Campi Nexi XPay
   nexiOrderId?: string;               // holdRef.id.slice(0,18) — chiave per trovare l'hold dal webhook

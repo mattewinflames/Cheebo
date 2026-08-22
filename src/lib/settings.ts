@@ -20,6 +20,11 @@ export interface AppSettings {
   /** Giorni di chiusura programmata: date "YYYY-MM-DD" in cui non si prenota
    *  (ferie, festivi). Vale solo per le NUOVE prenotazioni. */
   closedDays: string[];
+  /** Costo fisso aggiunto a ogni prenotazione online (in euro, es. 0.50).
+   *  Appare come "Costo servizio di prenotazione" nel riepilogo e nella comanda. */
+  costoServizio: number;
+  /** Se false, il costo servizio non viene applicato anche se costoServizio > 0. */
+  costoServizioAttivo: boolean;
 }
 
 /** Valori usati quando il documento non esiste ancora o non è leggibile.
@@ -28,6 +33,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cassaEnabled: true,
   bookingBlocked: false,
   closedDays: [],
+  costoServizio: 0,
+  costoServizioAttivo: false,
 };
 
 const ref = () => doc(db, "settings", "app");

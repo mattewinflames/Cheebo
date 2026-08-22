@@ -44,12 +44,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!prenotabili.some((u) => u.serviceKey === serviceKey))
     return res.status(409).json({ error: "sessione non prenotabile" });
 
+  const costoServizio = (settings.costoServizioAttivo && typeof settings.costoServizio === "number" && settings.costoServizio > 0)
+    ? settings.costoServizio : 0;
+
   // Menù reale → ricalcolo autoritativo del carrello.
   const menuSnap = await adminDb.collection(MENU).get();
   const menu = menuSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
   const byId = new Map(menu.map((m) => [m.id, m] as const));
 
-  const resolved = resolveCart(menu, serviceKey, cart);
+  const resolved = resolveCart(menu, serviceKey, cart, costoServizio);
   if (isResolveError(resolved)) return res.status(400).json({ error: resolved.error });
 
   const n = totalWindows(service);
@@ -97,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         serviceKey, cells: plan.cells, specials: resolved.specials, patties: resolved.patties,
         windowIndex: plan.windowIndex, readyMin: plan.readyMin, mode: mode as "first" | "at",
         name: name.trim(), phone: typeof phone === "string" ? phone.replace(/\D/g, "") : "",
-        items: resolved.items, total: resolved.total,
+        items: resolved.items, total: resolved.totalConServizio, serviceCharge: resolved.serviceCharge,
         status: "attesa", expiresAt: Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60_000),
         createdAt: FieldValue.serverTimestamp(),
       };
@@ -115,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // L'importo va in centesimi come stringa (es. 1550 per 15.50 EUR).
   const appUrl = process.env.APP_URL ?? `https://${req.headers.host ?? ""}`;
   const nexiOrderId = holdRef.id.slice(0, 18); // max 18 caratteri per Nexi
-  const amountCents = String(Math.round(resolved.total * 100));
+  const amountCents = String(Math.round(resolved.totalConServizio * 100));
   const correlationId = randomUUID();
 
   try {

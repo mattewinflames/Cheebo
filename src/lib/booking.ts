@@ -35,7 +35,9 @@ export interface StripeLine { name: string; amount: number; qty: number }
 export interface ResolvedCart {
   lines: CartLine[];                    // righe autoritative (label, price, patty, qty, specialId?)
   items: string[];                      // etichette per la comanda
-  total: number;                        // euro
+  total: number;                        // euro (solo prodotti, senza costo servizio)
+  totalConServizio: number;             // euro (totale finale da pagare, con costo servizio se attivo)
+  serviceCharge: number;               // euro (0 se non attivo)
   patties: number;
   specials: Record<string, number>;
   stripeLineItems: StripeLine[];
@@ -48,7 +50,7 @@ const MAX_QTY_PER_LINE = 99;
 
 /** Ricostruisce il carrello dai prezzi del menù. Non si fida di nulla che venga
  *  dal client tranne la CONFIGURAZIONE (id, formato, tipo, quantità, opzioni). */
-export function resolveCart(menu: MenuItem[], serviceKey: string, cart: CartReqLine[]): ResolveResult {
+export function resolveCart(menu: MenuItem[], serviceKey: string, cart: CartReqLine[], serviceCharge = 0): ResolveResult {
   if (!Array.isArray(cart) || cart.length === 0) return { error: "carrello vuoto" };
   const byId = new Map(menu.map((m) => [m.id, m]));
   const lines: CartLine[] = [];
@@ -86,10 +88,13 @@ export function resolveCart(menu: MenuItem[], serviceKey: string, cart: CartReqL
 
   const total = cartTotal(lines);
   if (!(total > 0)) return { error: "totale non valido" };
+  const charge = Math.round((serviceCharge ?? 0) * 100) / 100; // arrotonda a centesimi
   return {
     lines,
     items: cartItemStrings(lines),
     total,
+    totalConServizio: Math.round((total + charge) * 100) / 100,
+    serviceCharge: charge,
     patties: cartPatties(lines),
     specials: cartSpecials(lines),
     stripeLineItems: lines.map((l) => ({ name: l.label, amount: Math.round(l.price * 100), qty: l.qty })),

@@ -38,7 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const o = snap.data() as {
     code?: number; name: string; phone?: string; readyMin: number;
-    items: string[]; total: number; pay: string;
+    items: string[]; total: number; serviceCharge?: number; pay: string;
   };
 
   const righe: string[] = [
@@ -69,12 +69,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   righe.push(
     dash(),
     lr("TOTALE", fmtEuro(o.total ?? 0)),
+  );
+  if (o.serviceCharge && o.serviceCharge > 0) {
+    righe.push(lr("  Costo servizio", fmtEuro(o.serviceCharge)));
+    const prodotti = Math.round(((o.total ?? 0) - o.serviceCharge) * 100) / 100;
+    righe.push(lr("  Prodotti", fmtEuro(prodotti)));
+  }
+  righe.push(
     lr("Pagamento", o.pay === "online" ? "PAGATO" : "IN LOCO"),
     dash(),
     ctr("Bite the East Side"),
     ctr("La Rustica - Roma"),
     "",
-    "",  // spazio per il taglio automatico
+    "",
   );
 
   const txt = righe.join("\n");

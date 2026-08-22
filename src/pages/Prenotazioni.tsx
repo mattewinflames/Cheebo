@@ -61,6 +61,8 @@ export default function Prenotazioni() {
   const lines = Object.values(cart).filter((v) => v.qty > 0);
   const count = lines.reduce((s, v) => s + v.qty, 0);
   const total = cartTotal(lines);
+  const serviceCharge = (settings.costoServizioAttivo && settings.costoServizio > 0) ? settings.costoServizio : 0;
+  const totalConServizio = Math.round((total + serviceCharge) * 100) / 100;
   // special proposti in questa sessione (escono dalle sezioni normali)
   const specials = useMemo(
     () => menu.filter((m) => m.active && isSpecialActive(m, sessionKey)),
@@ -147,7 +149,7 @@ export default function Prenotazioni() {
         mode: (choice === "first" ? "first" : "at") as BookingMode,
         targetWindow: choice && choice !== "first" ? choice.window : undefined,
         pay: method,
-        total,
+        total: totalConServizio,
         phone: "",
         specials: cartSpecials(lines),
       });
@@ -239,7 +241,7 @@ export default function Prenotazioni() {
                   <ShoppingBag size={19} />{count}
                 </button>
                 <button onClick={() => { setChoice(null); setStep("quando"); }} style={barBtn}>
-                  <span>Scegli quando</span><span>{euro(total)} →</span>
+                  <span>Scegli quando</span><span>{euro(totalConServizio)} →</span>
                 </button>
               </div>
             </Bar>
@@ -272,7 +274,7 @@ export default function Prenotazioni() {
                 <div style={{ borderTop: `1px solid ${C.line}`, padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>Totale</div>
-                    <span className="arch" style={{ fontWeight: 800, fontSize: 24, color: C.blue }}>{euro(total)}</span>
+                    <span className="arch" style={{ fontWeight: 800, fontSize: 24, color: C.blue }}>{euro(totalConServizio)}</span>
                   </div>
                   <button onClick={() => { setCartOpen(false); setChoice(null); setStep("quando"); }} style={{ flex: 1, background: C.blue, color: "#fff", border: "none", borderRadius: 12, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Scegli quando →</button>
                 </div>
@@ -341,7 +343,13 @@ export default function Prenotazioni() {
             {preview.tranches > 1 && <div style={{ fontSize: 12, color: C.muted }}>Preparato in {preview.tranches} tranche, consegnato insieme</div>}
             <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, margin: "22px 0", textAlign: "left" }}>
               {lines.map((v) => <div key={v.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "4px 0" }}><span>{v.qty > 1 ? `${v.qty}× ` : ""}{v.label}</span><span style={{ color: C.muted }}>{euro(v.price * v.qty)}</span></div>)}
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}><span>Totale</span><span style={{ color: C.blue }}>{euro(total)}</span></div>
+              {serviceCharge > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.muted, marginTop: 4 }}>
+                  <span>Costo servizio di prenotazione</span>
+                  <span>{euro(serviceCharge)}</span>
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}><span>Totale</span><span style={{ color: C.blue }}>{euro(totalConServizio)}</span></div>
             </div>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Il tuo nome" style={{ width: "100%", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, padding: "13px 14px", fontSize: 16, marginBottom: 14 }} />
             <button onClick={() => name.trim() && setStep("pagamento")} disabled={!name.trim()} style={{ width: "100%", background: name.trim() ? C.blue : C.line, color: name.trim() ? "#fff" : C.muted, border: "none", borderRadius: 12, padding: "15px", fontWeight: 700, fontSize: 15, cursor: name.trim() ? "pointer" : "default" }}>Confermo</button>
