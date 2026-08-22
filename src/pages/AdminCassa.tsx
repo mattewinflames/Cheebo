@@ -988,7 +988,7 @@ function IncassiSection() {
         "Online" = pagato dal cliente sul sito. "Cassa" = incassato al banco, con contanti o carta. La colonna a destra è l'importo di ciascun ordine.
       </div>
 
-      <ExportPanel />
+      <ExportPanel defaultDate={sessionKey.slice(0, 10) || new Date().toISOString().slice(0, 10)} />
     </div>
   );
 }
@@ -998,11 +998,10 @@ function IncassiSection() {
    ⚠️ Non è una chiusura fiscale: serve a riconciliare gli incassi (contanti /
    carta / online) con la chiusura giornaliera del registratore telematico.
    ========================================================================== */
-function ExportPanel() {
-  const oggi = new Date().toISOString().slice(0, 10);
-  const primoDelMese = oggi.slice(0, 8) + "01";
-  const [from, setFrom] = useState(primoDelMese);
-  const [to, setTo] = useState(oggi);
+function ExportPanel({ defaultDate }: { defaultDate: string }) {
+  const [from, setFrom] = useState(defaultDate);
+  const [to, setTo] = useState(defaultDate);
+  useEffect(() => { setFrom(defaultDate); setTo(defaultDate); }, [defaultDate]);
   const [formato, setFormato] = useState<"xlsx" | "csv">("xlsx");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
