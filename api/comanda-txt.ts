@@ -39,11 +39,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const o = snap.data() as {
     code?: number; name: string; phone?: string; readyMin: number;
     items: string[]; total: number; serviceCharge?: number; pay: string;
+    serviceKey?: string; createdAt?: { toDate?: () => Date };
   };
+
+  // Data dal serviceKey (YYYY-MM-DD-Label) → GG/MM/YYYY
+  const dataServizio = (() => {
+    const m = (o.serviceKey ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+  })();
+  // Ora di ricezione dal Timestamp Firestore
+  const oraRicezione = (() => {
+    const d = o.createdAt?.toDate?.();
+    if (!d) return "";
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  })();
 
   const righe: string[] = [
     ctr("*** CHEEBO ***"),
     ctr("COMANDA CUCINA"),
+    dash(),
+    ...(dataServizio ? [lr("Data:", dataServizio)] : []),
+    ...(oraRicezione ? [lr("Ora:", oraRicezione)] : []),
     dash(),
     ctr(`#${String(o.code ?? "?").padStart(3, "0")}`),
     ctr(`PRONTO ALLE  ${fmtOra(o.readyMin)}`),
