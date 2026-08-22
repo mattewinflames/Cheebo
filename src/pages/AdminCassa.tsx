@@ -3,7 +3,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } fr
 import { auth } from "../lib/firebase";
 import { upcomingSessions, resolveService, dateKey, type UpcomingSession } from "../lib/schedule";
 import { CAP, totalWindows, windowStartMin, windowEndMin, planFirst, fmt, type Service } from "../lib/dispatch";
-import { subscribeOrders, subscribeLedger, setStatus, clearSession, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
+import { subscribeOrders, subscribeLedger, setStatus, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
 import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore";
 import { fetchOrdersRange, buildRows, summarize, downloadCSV, downloadXLSX } from "../lib/export";
 import { euro, isPanino, occupiesGriddle, FORMATS, ingredientsOf, menuDrinkSurcharge, griddlePatty, cartLineOf, cartPrice, cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, specialLeft, type FormatId, type CartType, type CartLine, type MenuItem, type MenuType, type PaninoConfig } from "../lib/menu";
@@ -767,11 +767,6 @@ function OrdiniSection() {
     }
   };
   const [clearing, setClearing] = useState(false);
-  const doClear = async () => {
-    if (!window.confirm(`Cancellare TUTTI gli ordini di "${session?.dayLabel} ${session?.label}" e azzerare la piastra?\n\nOperazione di test, non reversibile.`)) return;
-    setClearing(true);
-    try { const k = sessionKey; await clearSession(k); } finally { setClearing(false); }
-  };
 
   if (!service) return <div style={{ color: C.muted }}>Nessun servizio disponibile.</div>;
   const n = totalWindows(service);
@@ -791,7 +786,6 @@ function OrdiniSection() {
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
         <SessionPicker sessions={sessions} value={sessionKey} onChange={setSessionKey} />
         <div style={{ flex: 1 }} />
-        <button onClick={doClear} disabled={clearing || orders.length === 0} title="Solo per i test — cancella gli ordini della sessione" style={{ display: "flex", alignItems: "center", gap: 6, background: "#FFF4F0", color: C.redline, border: `1px solid #F3C9BC`, borderRadius: 9, padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: clearing || orders.length === 0 ? "default" : "pointer", opacity: clearing || orders.length === 0 ? 0.5 : 1 }}><RotateCcw size={14} /> {clearing ? "Pulizia…" : "Pulisci (test)"}</button>
         <Stat n={orders.length} label="ordini" /><Stat n={totalPatty} label="patty" />
         {curWi >= 0 && <Stat n={`${fill[curWi] ?? 0}/${CAP}`} label={`finestra ${fmt(windowStartMin(service, curWi))}`} />}
       </div>
