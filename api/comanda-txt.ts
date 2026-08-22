@@ -55,15 +55,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   righe.push(dash());
 
+  // Word-wrap: spezza solo tra parole, mai a metà
+  function wrap(text: string, maxLen: number, indent = ""): string[] {
+    const words = text.trim().split(" ");
+    const righe: string[] = [];
+    let riga = indent;
+    for (const w of words) {
+      if (riga.length + (riga === indent ? 0 : 1) + w.length > maxLen) {
+        if (riga.trim()) righe.push(riga);
+        riga = indent + w;
+      } else {
+        riga += (riga === indent ? "" : " ") + w;
+      }
+    }
+    if (riga.trim()) righe.push(riga);
+    return righe;
+  }
+
   for (const item of o.items) {
     const isExtra = item.startsWith("  ") || item.startsWith("+");
-    const prefix = isExtra ? "    " : "  ";
-    // Spezza le righe lunghe
-    const testo = item.trim();
-    const max = W - prefix.length;
-    for (let i = 0; i < testo.length; i += max) {
-      righe.push(prefix + testo.slice(i, i + max));
+    const indent = isExtra ? "      " : "  ";
+    for (const riga of wrap(item, W, indent)) {
+      righe.push(riga);
     }
+    if (!isExtra) righe.push(""); // riga vuota tra voci principali per leggibilità
   }
 
   righe.push(
