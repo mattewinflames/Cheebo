@@ -261,7 +261,7 @@ export default function Prenotazioni() {
                     <div key={v.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 0", borderBottom: `1px solid ${C.line}` }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>{v.label}</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{euro(v.price)} · tot {euro(v.price * v.qty)}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{v.qty > 1 ? `${euro(v.price)} cad · tot ${euro(v.price * v.qty)}` : euro(v.price)}</div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                         <button onClick={() => setLineQty(v, v.qty - 1)} style={{ ...rnd, width: 36, height: 36 }} aria-label={v.qty > 1 ? "Riduci" : "Rimuovi"}>{v.qty > 1 ? "−" : <Trash2 size={16} color={C.blue} />}</button>
@@ -275,6 +275,11 @@ export default function Prenotazioni() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>Totale</div>
                     <span className="arch" style={{ fontWeight: 800, fontSize: 24, color: C.blue }}>{euro(totalConServizio)}</span>
+                    {serviceCharge > 0 && (
+                      <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                        di cui {euro(serviceCharge)} costo servizio di prenotazione
+                      </div>
+                    )}
                   </div>
                   <button onClick={() => { setCartOpen(false); setChoice(null); setStep("quando"); }} style={{ flex: 1, background: C.blue, color: "#fff", border: "none", borderRadius: 12, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Scegli quando →</button>
                 </div>
