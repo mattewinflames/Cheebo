@@ -80,12 +80,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })();
 
   const righe: string[] = [
-    "", "", "", "", // spazio per molletta
+    "", "", // spazio per molletta
     ctr("*** CHEEBO ***"),
-    ctr("COMANDA CUCINA"),
-    dash(),
-    ...(dataServizio ? [lr("Data:", dataServizio)] : []),
-    ...(oraRicezione ? [lr("Ora:", oraRicezione)] : []),
     dash(),
     ctr(`#${String(o.code ?? "?").padStart(3, "0")}`),
     ctr(`PRONTO ALLE  ${fmtOra(o.readyMin)}`),
@@ -117,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const item of o.items.map(toASCII)) {
     const isExtra = item.startsWith("  ") || item.startsWith("+");
     const indent = isExtra ? "      " : "  ";
-    for (const riga of wrap(item, W, indent)) {
+    for (const riga of wrap(item.toUpperCase(), W, indent)) {
       righe.push(riga);
     }
     if (!isExtra) righe.push(""); // riga vuota tra voci principali per leggibilità
@@ -135,8 +131,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   righe.push(
     lr("Pagamento", o.pay === "online" ? "PAGATO" : "IN LOCO"),
     dash(),
-    ctr("Bite the East Side"),
-    ctr("La Rustica - Roma"),
+    ctr("*** CHEEBO ***"),
+    ctr("Bite the East Side - La Rustica"),
+    ...(dataServizio || oraRicezione
+      ? [lr(dataServizio ? `Data: ${dataServizio}` : "", oraRicezione ? `Ora: ${oraRicezione}` : "")]
+      : []),
     "",
     "",
   );
