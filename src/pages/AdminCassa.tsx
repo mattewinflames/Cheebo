@@ -9,6 +9,7 @@ import { fetchOrdersRange, buildRows, summarize, downloadCSV, downloadXLSX } fro
 import { euro, isPanino, occupiesGriddle, FORMATS, ingredientsOf, menuDrinkSurcharge, griddlePatty, cartLineOf, cartPrice, cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, specialLeft, type FormatId, type CartType, type CartLine, type MenuItem, type MenuType, type PaninoConfig } from "../lib/menu";
 import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings } from "lucide-react";
 import { subscribeSettings, saveSettings, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
+import { bluetoothSupported, printESCPOS } from "../lib/bluetoothPrinter";
 
 const C = {
   bg: "#FFFFFF", surface: "#F5F5FB", line: "#E8E8F2",
@@ -752,16 +753,26 @@ function OrdiniSection() {
     setPrinting(o.id);
     try {
       const r = await fetch(`/api/comanda-txt?order_id=${encodeURIComponent(o.id)}`);
-      if (!r.ok) { alert("Errore generazione PDF"); return; }
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `comanda-${o.code ?? o.id.slice(0, 6)}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      alert("Errore download comanda");
+      if (!r.ok) { alert("Errore generazione comanda"); return; }
+      const text = await r.text();
+
+      if (bluetoothSupported()) {
+        // Stampa diretta BLE (Chrome Android)
+        await printESCPOS(text);
+      } else {
+        // Fallback: download manuale (Safari iOS, Firefox, ecc.)
+        const blob = new Blob([text], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `comanda-${o.code ?? o.id.slice(0, 6)}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      // L'utente ha annullato il dialog Bluetooth: non è un errore
+      if (err instanceof DOMException && err.name === "NotFoundError") return;
+      alert("Errore stampa comanda");
     } finally {
       setPrinting(null);
     }
