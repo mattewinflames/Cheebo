@@ -37,22 +37,29 @@ let cachedChar:   BluetoothRemoteGATTCharacteristic | null = null;
 export const bluetoothSupported = (): boolean =>
   typeof navigator !== 'undefined' && 'bluetooth' in navigator;
 
-/** Invia un Uint8Array alla caratteristica BLE a chunk. */
+/** Invia un Uint8Array alla caratteristica BLE a chunk, con timeout globale. */
 async function writeChunked(
   char: BluetoothRemoteGATTCharacteristic,
   data: Uint8Array,
 ): Promise<void> {
-  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-    const chunk = data.slice(i, i + CHUNK_SIZE);
-    // writeValueWithoutResponse è più veloce; se non supportato cade su writeValue
-    if (char.properties.writeWithoutResponse) {
-      await char.writeValueWithoutResponse(chunk);
-    } else {
-      await char.writeValue(chunk);
+  const TIMEOUT_MS = 8000; // 8 secondi massimi per l'intera scrittura
+  const writePromise = (async () => {
+    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+      const chunk = data.slice(i, i + CHUNK_SIZE);
+      if (char.properties.writeWithoutResponse) {
+        await char.writeValueWithoutResponse(chunk);
+      } else {
+        await char.writeValue(chunk);
+      }
+      await new Promise(r => setTimeout(r, 20));
     }
-    // Piccola pausa tra chunk per non saturare il buffer BLE
-    await new Promise(r => setTimeout(r, 20));
-  }
+  })();
+
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Timeout stampa: stampante non risponde")), TIMEOUT_MS),
+  );
+
+  await Promise.race([writePromise, timeoutPromise]);
 }
 
 /** Tenta la connessione con un profilo BLE. */
@@ -68,28 +75,32 @@ async function connectWithProfile(
 /**
  * Stampa il testo sulla stampante BLE.
  * Alla prima chiamata mostra il dialog di selezione dispositivo;
- * le chiamate successive riusano il dispositivo già accoppiato.
+ * le chiamate successive riusano il dispositivo già accoppiato,
+ * riconnettendo automaticamente se la connessione GATT è caduta.
  */
 export async function printESCPOS(textContent: string): Promise<void> {
-  // Richiedi dispositivo solo se non già accoppiato o disconnesso
-  if (!cachedDevice || !cachedDevice.gatt?.connected) {
+  // Richiedi dispositivo solo se non ancora selezionato
+  if (!cachedDevice) {
     cachedDevice = await navigator.bluetooth.requestDevice({
-      // Mostra tutti i dispositivi BLE nelle vicinanze:
-      // l'operatore selezionerà la Bisofice Z58-01 dall'elenco.
-      // Alternativa più restrittiva: filters: [{ name: 'Bisofice Z58-01' }]
       acceptAllDevices: true,
       optionalServices: PROFILES.map(p => p.serviceUUID),
     });
-    cachedChar = null; // resetta la char se cambia device
+    cachedChar = null;
   }
 
-  // Connetti (o riconnetti se perso) e trova la caratteristica
+  // Se la connessione GATT è caduta (tab in background, schermo spento, ecc.)
+  // resetta la char e riconnetti
+  if (!cachedDevice.gatt?.connected) {
+    cachedChar = null;
+  }
+
+  // Connetti (o riconnetti) e trova la caratteristica
   if (!cachedChar) {
     let lastErr: unknown;
     for (const profile of PROFILES) {
       try {
         cachedChar = await connectWithProfile(cachedDevice, profile);
-        break; // profilo trovato
+        break;
       } catch (e) {
         lastErr = e;
       }
@@ -114,5 +125,19 @@ export async function printESCPOS(textContent: string): Promise<void> {
   payload.set(textBytes, ESC_INIT.length);
   payload.set(FEED_CUT, ESC_INIT.length + textBytes.length);
 
-  await writeChunked(cachedChar, payload);
+  try {
+    await writeChunked(cachedChar, payload);
+    // Pausa per permettere alla stampante di digerire gli ultimi byte
+    // prima di disconnettere — evita inceppamenti su stampe ravvicinate
+    await new Promise(r => setTimeout(r, 600));
+  } catch (err) {
+    cachedChar = null;
+    throw err;
+  } finally {
+    // Disconnessione esplicita dopo ogni stampa: svuota il buffer BLE
+    // e porta la stampante in stato "pronto" per la stampa successiva.
+    // La riconnessione al click successivo è automatica.
+    try { cachedDevice?.gatt?.disconnect(); } catch { /* ignora */ }
+    cachedChar = null;
+  }
 }
