@@ -26,6 +26,29 @@ function lr(left: string, right: string) {
 }
 function dash() { return "-".repeat(W); }
 
+/** Converte i caratteri non-ASCII più comuni in equivalenti ASCII sicuri per ESC/POS. */
+function toASCII(text: string): string {
+  return text
+    .replace(/\u2122/g, "TM")       // ™
+    .replace(/\u00AE/g, "(R)")      // ®
+    .replace(/\u00A9/g, "(C)")      // ©
+    .replace(/\u00D7/g, "x")        // ×
+    .replace(/\u00F7/g, "/")        // ÷
+    .replace(/[\u00E0\u00E1\u00E2\u00E3\u00E4\u00E5\u00C0\u00C1\u00C2\u00C3\u00C4\u00C5]/g, "a")
+    .replace(/[\u00E8\u00E9\u00EA\u00EB\u00C8\u00C9\u00CA\u00CB]/g, "e")
+    .replace(/[\u00EC\u00ED\u00EE\u00EF\u00CC\u00CD\u00CE\u00CF]/g, "i")
+    .replace(/[\u00F2\u00F3\u00F4\u00F5\u00F6\u00D2\u00D3\u00D4\u00D5\u00D6]/g, "o")
+    .replace(/[\u00F9\u00FA\u00FB\u00FC\u00D9\u00DA\u00DB\u00DC]/g, "u")
+    .replace(/[\u00FD\u00FF\u00DD]/g, "y")
+    .replace(/[\u00F1\u00D1]/g, "n")
+    .replace(/[\u00E7\u00C7]/g, "c")
+    .replace(/\u20AC/g, "EUR")      // €
+    .replace(/[\u2013\u2014]/g, "-") // – —
+    .replace(/[\u2018\u2019]/g, "'") // ' '
+    .replace(/[\u201C\u201D]/g, '"') // " "
+    .replace(/[^\x00-\x7F]/g, "?"); // qualsiasi altro non-ASCII → ?
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).end();
 
@@ -55,6 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })();
 
   const righe: string[] = [
+    "", "", "", "", // spazio per molletta
     ctr("*** CHEEBO ***"),
     ctr("COMANDA CUCINA"),
     dash(),
@@ -88,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return righe;
   }
 
-  for (const item of o.items) {
+  for (const item of o.items.map(toASCII)) {
     const isExtra = item.startsWith("  ") || item.startsWith("+");
     const indent = isExtra ? "      " : "  ";
     for (const riga of wrap(item, W, indent)) {
