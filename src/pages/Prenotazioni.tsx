@@ -26,6 +26,7 @@ export default function Prenotazioni() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [name, setName] = useState("");
+  const [accettaTermini, setAccettaTermini] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -47,6 +48,16 @@ export default function Prenotazioni() {
 
   useEffect(() => subscribeMenu(setMenu, true), []);
   useEffect(() => subscribeSettings(setSettings), []);
+
+  // Blocco prenotazioni durante l'orario di apertura
+  const bookingBlockedByHour = useMemo(() => {
+    if (!settings.onlyClosedBooking) return false;
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const [sh, sm] = (settings.onlyClosedStart ?? "12:30").split(":").map(Number);
+    const [eh, em] = (settings.onlyClosedEnd ?? "22:30").split(":").map(Number);
+    return nowMin >= sh * 60 + sm && nowMin < eh * 60 + em;
+  }, [settings.onlyClosedBooking, settings.onlyClosedStart, settings.onlyClosedEnd]);
   // se la sessione scelta sparisce (giorno chiuso / blocco attivato), riallinea
   useEffect(() => {
     if (sessions.length && !sessions.some((s) => s.serviceKey === sessionKey)) {
@@ -294,13 +305,22 @@ export default function Prenotazioni() {
         <div style={{ maxWidth: 580, margin: "0 auto", paddingBottom: choice ? 92 : 24 }}>
           <Top onBack={() => setStep("menu")} title="Quando lo ritiri?" />
           <div style={{ padding: "14px 18px 24px" }}>
-            {sessions.length === 0 && (
+            {sessions.length === 0 && !bookingBlockedByHour && (
               <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, textAlign: "center" }}>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Prenotazioni non disponibili</div>
                 <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>
                   {settings.bookingBlocked
                     ? "Al momento non accettiamo prenotazioni online. Riprova più tardi."
                     : "Non ci sono servizi prenotabili al momento. Riprova più avanti."}
+                </div>
+              </div>
+            )}
+            {bookingBlockedByHour && (
+              <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, textAlign: "center" }}>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Prenotazioni online non disponibili</div>
+                <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>
+                  Le prenotazioni online sono disponibili solo fuori dall'orario di apertura del locale.
+                  Passa direttamente da noi!
                 </div>
               </div>
             )}
@@ -357,7 +377,18 @@ export default function Prenotazioni() {
               <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}><span>Totale</span><span style={{ color: C.blue }}>{euro(totalConServizio)}</span></div>
             </div>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Il tuo nome" style={{ width: "100%", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, padding: "13px 14px", fontSize: 16, marginBottom: 14 }} />
-            <button onClick={() => name.trim() && setStep("pagamento")} disabled={!name.trim()} style={{ width: "100%", background: name.trim() ? C.blue : C.line, color: name.trim() ? "#fff" : C.muted, border: "none", borderRadius: 12, padding: "15px", fontWeight: 700, fontSize: 15, cursor: name.trim() ? "pointer" : "default" }}>Confermo</button>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={accettaTermini}
+                onChange={(e) => setAccettaTermini(e.target.checked)}
+                style={{ marginTop: 3, flexShrink: 0, width: 16, height: 16, accentColor: C.blue }}
+              />
+              <span style={{ fontSize: 13, color: C.muted, lineHeight: 1.45 }}>
+                Trattandosi di preparazioni espresse, l'ordine non è annullabile né rimborsabile a 30 minuti dall'apertura del negozio.
+              </span>
+            </label>
+            <button onClick={() => name.trim() && accettaTermini && setStep("pagamento")} disabled={!name.trim() || !accettaTermini} style={{ width: "100%", background: name.trim() && accettaTermini ? C.blue : C.line, color: name.trim() && accettaTermini ? "#fff" : C.muted, border: "none", borderRadius: 12, padding: "15px", fontWeight: 700, fontSize: 15, cursor: name.trim() && accettaTermini ? "pointer" : "default" }}>Confermo</button>
             <button onClick={() => { setStep("quando"); }} style={{ background: "none", color: C.muted, border: "none", marginTop: 12, fontSize: 13.5, cursor: "pointer", textDecoration: "underline" }}>Annulla</button>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>Lo slot è tenuto per te per alcuni minuti, fino alla conferma.</div>
           </div>

@@ -25,6 +25,16 @@ export interface AppSettings {
   costoServizio: number;
   /** Se false, il costo servizio non viene applicato anche se costoServizio > 0. */
   costoServizioAttivo: boolean;
+  /** Se true, le prenotazioni online sono accettate solo quando il negozio è chiuso
+   *  (cioè fuori dall'orario onlyClosedStart–onlyClosedEnd). Disabilitare quando
+   *  l'app fungerà da registratore di cassa e dovrà accettare ordini anche durante
+   *  il servizio. */
+  onlyClosedBooking: boolean;
+  /** Inizio orario di apertura (formato "HH:MM") usato come finestra di blocco
+   *  prenotazioni quando onlyClosedBooking è attivo. Default: primo servizio del giorno. */
+  onlyClosedStart: string;
+  /** Fine orario di apertura (formato "HH:MM"). Default: fine ultimo servizio del giorno. */
+  onlyClosedEnd: string;
 }
 
 /** Valori usati quando il documento non esiste ancora o non è leggibile.
@@ -35,6 +45,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   closedDays: [],
   costoServizio: 0,
   costoServizioAttivo: false,
+  onlyClosedBooking: false,
+  onlyClosedStart: "12:30",
+  onlyClosedEnd: "22:30",
 };
 
 const ref = () => doc(db, "settings", "app");

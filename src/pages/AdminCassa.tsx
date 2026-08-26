@@ -174,6 +174,43 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
         onToggle={() => toggle({ bookingBlocked: !settings.bookingBlocked })}
       />
 
+      {/* Prenotazioni solo fuori orario */}
+      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Solo prenotazioni fuori orario</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
+              Quando attivo, i clienti possono prenotare online solo mentre il negozio è chiuso (fuori dalla fascia oraria indicata).
+              Disattivare quando l'app fungerà da registratore di cassa.
+            </div>
+          </div>
+          <div style={{ paddingTop: 2 }}>
+            <Switch on={settings.onlyClosedBooking} onClick={() => { if (!busy) toggle({ onlyClosedBooking: !settings.onlyClosedBooking }); }} />
+          </div>
+        </div>
+        {settings.onlyClosedBooking && (
+          <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: C.muted, whiteSpace: "nowrap" }}>Orario apertura</span>
+            <input
+              type="time" value={settings.onlyClosedStart}
+              disabled={busy}
+              onChange={(e) => toggle({ onlyClosedStart: e.target.value })}
+              style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 10px", fontSize: 14, background: busy ? C.bg : "#fff", color: C.ink }}
+            />
+            <span style={{ fontSize: 13, color: C.muted }}>→</span>
+            <input
+              type="time" value={settings.onlyClosedEnd}
+              disabled={busy}
+              onChange={(e) => toggle({ onlyClosedEnd: e.target.value })}
+              style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 10px", fontSize: 14, background: busy ? C.bg : "#fff", color: C.ink }}
+            />
+            <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+              In questa fascia le prenotazioni online sono bloccate.
+            </span>
+          </div>
+        )}
+      </div>
+
       <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
         <div style={{ fontWeight: 700, fontSize: 15 }}>Giorni di chiusura</div>
         <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
