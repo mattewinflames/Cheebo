@@ -32,6 +32,8 @@ function toASCII(text: string): string {
     .replace(/\u2122/g, "TM")       // ™
     .replace(/\u00AE/g, "(R)")      // ®
     .replace(/\u00A9/g, "(C)")      // ©
+    .replace(/\u00B7/g, "-")        // · (bullet centrato, usato come separatore)
+    .replace(/\u2022/g, "-")        // • (bullet)
     .replace(/\u00D7/g, "x")        // ×
     .replace(/\u00F7/g, "/")        // ÷
     .replace(/[\u00E0\u00E1\u00E2\u00E3\u00E4\u00E5\u00C0\u00C1\u00C2\u00C3\u00C4\u00C5]/g, "a")
@@ -46,7 +48,7 @@ function toASCII(text: string): string {
     .replace(/[\u2013\u2014]/g, "-") // – —
     .replace(/[\u2018\u2019]/g, "'") // ' '
     .replace(/[\u201C\u201D]/g, '"') // " "
-    .replace(/[^\x00-\x7F]/g, "?"); // qualsiasi altro non-ASCII → ?
+    .replace(/[^\x00-\x7F]/g, " "); // qualsiasi altro non-ASCII → spazio
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -74,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const oraRicezione = (() => {
     const d = o.createdAt?.toDate?.();
     if (!d) return "";
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    return d.toLocaleTimeString("it-IT", { timeZone: "Europe/Rome", hour: "2-digit", minute: "2-digit", hour12: false });
   })();
 
   const righe: string[] = [
