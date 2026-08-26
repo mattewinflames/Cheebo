@@ -49,15 +49,20 @@ export default function Prenotazioni() {
   useEffect(() => subscribeMenu(setMenu, true), []);
   useEffect(() => subscribeSettings(setSettings), []);
 
-  // Blocco prenotazioni durante l'orario di apertura
+  // Blocco prenotazioni durante l'orario di apertura (per-dow, per-servizio)
   const bookingBlockedByHour = useMemo(() => {
     if (!settings.onlyClosedBooking) return false;
     const now = new Date();
+    const dow = now.getDay();
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    const [sh, sm] = (settings.onlyClosedStart ?? "12:30").split(":").map(Number);
-    const [eh, em] = (settings.onlyClosedEnd ?? "22:30").split(":").map(Number);
-    return nowMin >= sh * 60 + sm && nowMin < eh * 60 + em;
-  }, [settings.onlyClosedBooking, settings.onlyClosedStart, settings.onlyClosedEnd]);
+    const schedule = settings.onlyClosedSchedule ?? {};
+    const services = schedule[dow] ?? [];
+    return services.some((svc) => {
+      const [sh, sm] = svc.start.split(":").map(Number);
+      const [eh, em] = svc.end.split(":").map(Number);
+      return nowMin >= sh * 60 + sm && nowMin < eh * 60 + em;
+    });
+  }, [settings.onlyClosedBooking, settings.onlyClosedSchedule]);
   // se la sessione scelta sparisce (giorno chiuso / blocco attivato), riallinea
   useEffect(() => {
     if (sessions.length && !sessions.some((s) => s.serviceKey === sessionKey)) {

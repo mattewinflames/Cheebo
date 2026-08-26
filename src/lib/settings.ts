@@ -10,6 +10,7 @@
    ========================================================================== */
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import { SCHEDULE } from "./schedule";
 
 export interface AppSettings {
   /** Abilita la scheda Cassa (POS al banco) nell'area admin. */
@@ -25,16 +26,14 @@ export interface AppSettings {
   costoServizio: number;
   /** Se false, il costo servizio non viene applicato anche se costoServizio > 0. */
   costoServizioAttivo: boolean;
-  /** Se true, le prenotazioni online sono accettate solo quando il negozio è chiuso
-   *  (cioè fuori dall'orario onlyClosedStart–onlyClosedEnd). Disabilitare quando
-   *  l'app fungerà da registratore di cassa e dovrà accettare ordini anche durante
-   *  il servizio. */
+  /** Se true, le prenotazioni online sono accettate solo quando il negozio è chiuso.
+   *  Disabilitare quando l'app fungerà da registratore di cassa. */
   onlyClosedBooking: boolean;
-  /** Inizio orario di apertura (formato "HH:MM") usato come finestra di blocco
-   *  prenotazioni quando onlyClosedBooking è attivo. Default: primo servizio del giorno. */
-  onlyClosedStart: string;
-  /** Fine orario di apertura (formato "HH:MM"). Default: fine ultimo servizio del giorno. */
-  onlyClosedEnd: string;
+  /** Orari di blocco prenotazioni per giorno della settimana (0=Dom…6=Sab).
+   *  Ogni entry ha i servizi di quel giorno con il rispettivo orario di blocco.
+   *  Precompilato con gli orari reali di schedule.ts; modificabile dall'admin
+   *  per ogni giorno in modo persistente. */
+  onlyClosedSchedule: Record<number, { label: string; start: string; end: string }[]>;
 }
 
 /** Valori usati quando il documento non esiste ancora o non è leggibile.
@@ -46,8 +45,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   costoServizio: 0,
   costoServizioAttivo: false,
   onlyClosedBooking: false,
-  onlyClosedStart: "12:30",
-  onlyClosedEnd: "22:30",
+  onlyClosedSchedule: Object.fromEntries(
+    Object.entries(SCHEDULE)
+      .filter(([, defs]) => defs.length > 0)
+      .map(([dow, defs]) => [
+        Number(dow),
+        defs.map((d) => ({ label: d.label, start: d.start, end: d.end === "24:00" ? "23:59" : d.end })),
+      ]),
+  ) as Record<number, { label: string; start: string; end: string }[]>,
 };
 
 const ref = () => doc(db, "settings", "app");

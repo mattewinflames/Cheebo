@@ -174,13 +174,14 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
         onToggle={() => toggle({ bookingBlocked: !settings.bookingBlocked })}
       />
 
-      {/* Prenotazioni solo fuori orario */}
+      {/* Prenotazioni solo fuori orario — per giorno della settimana */}
       <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Solo prenotazioni fuori orario</div>
             <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
-              Quando attivo, i clienti possono prenotare online solo mentre il negozio è chiuso (fuori dalla fascia oraria indicata).
+              Quando attivo, i clienti possono prenotare online solo mentre il negozio è chiuso.
+              Gli orari sono precompilati con quelli reali e modificabili per ogni giorno.
               Disattivare quando l'app fungerà da registratore di cassa.
             </div>
           </div>
@@ -188,27 +189,52 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
             <Switch on={settings.onlyClosedBooking} onClick={() => { if (!busy) toggle({ onlyClosedBooking: !settings.onlyClosedBooking }); }} />
           </div>
         </div>
-        {settings.onlyClosedBooking && (
-          <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, color: C.muted, whiteSpace: "nowrap" }}>Orario apertura</span>
-            <input
-              type="time" value={settings.onlyClosedStart}
-              disabled={busy}
-              onChange={(e) => toggle({ onlyClosedStart: e.target.value })}
-              style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 10px", fontSize: 14, background: busy ? C.bg : "#fff", color: C.ink }}
-            />
-            <span style={{ fontSize: 13, color: C.muted }}>→</span>
-            <input
-              type="time" value={settings.onlyClosedEnd}
-              disabled={busy}
-              onChange={(e) => toggle({ onlyClosedEnd: e.target.value })}
-              style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 10px", fontSize: 14, background: busy ? C.bg : "#fff", color: C.ink }}
-            />
-            <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
-              In questa fascia le prenotazioni online sono bloccate.
-            </span>
-          </div>
-        )}
+
+        {settings.onlyClosedBooking && (() => {
+          const DOW_LABELS = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
+          const schedule = settings.onlyClosedSchedule ?? {};
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
+              {([0, 1, 2, 3, 4, 5, 6] as const).map((dow) => {
+                const services = schedule[dow] ?? [];
+                if (services.length === 0) return (
+                  <div key={dow} style={{ fontSize: 13, color: C.muted, paddingLeft: 2 }}>
+                    <span style={{ fontWeight: 600 }}>{DOW_LABELS[dow]}:</span> chiuso
+                  </div>
+                );
+                return (
+                  <div key={dow} style={{ background: C.surface, borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{DOW_LABELS[dow]}</div>
+                    {services.map((svc, idx) => (
+                      <div key={svc.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: idx < services.length - 1 ? 6 : 0, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 12.5, color: C.muted, minWidth: 46 }}>{svc.label}</span>
+                        <span style={{ fontSize: 12, color: C.muted }}>blocca</span>
+                        <input
+                          type="time" value={svc.start} disabled={busy}
+                          onChange={(e) => {
+                            const updated = { ...schedule, [dow]: services.map((s, i) => i === idx ? { ...s, start: e.target.value } : s) };
+                            toggle({ onlyClosedSchedule: updated });
+                          }}
+                          style={{ border: `1px solid ${C.line}`, borderRadius: 7, padding: "5px 8px", fontSize: 13, background: busy ? C.bg : "#fff", color: C.ink }}
+                        />
+                        <span style={{ fontSize: 12, color: C.muted }}>→</span>
+                        <input
+                          type="time" value={svc.end} disabled={busy}
+                          onChange={(e) => {
+                            const updated = { ...schedule, [dow]: services.map((s, i) => i === idx ? { ...s, end: e.target.value } : s) };
+                            toggle({ onlyClosedSchedule: updated });
+                          }}
+                          style={{ border: `1px solid ${C.line}`, borderRadius: 7, padding: "5px 8px", fontSize: 13, background: busy ? C.bg : "#fff", color: C.ink }}
+                        />
+                        <span style={{ fontSize: 11, color: C.muted }}>prenotazioni bloccate in questa fascia</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
