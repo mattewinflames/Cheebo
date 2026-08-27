@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { upcomingSessions, resolveService, dateKey, type UpcomingSession } from "../lib/schedule";
@@ -10,6 +10,7 @@ import { euro, isPanino, occupiesGriddle, FORMATS, ingredientsOf, menuDrinkSurch
 import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings } from "lucide-react";
 import { subscribeSettings, saveSettings, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
 import { bluetoothSupported, printESCPOS } from "../lib/bluetoothPrinter";
+import { logBLE } from "../lib/bleLogger";
 
 const C = {
   bg: "#FFFFFF", surface: "#F5F5FB", line: "#E8E8F2",
@@ -811,8 +812,12 @@ function OrdiniSection() {
   useEffect(() => { if (service && sessionKey) return subscribeLedger(sessionKey, totalWindows(service), setLedger); }, [sessionKey, service?.startMin]);
   useEffect(() => { const after = () => setPrintOrder(null); window.addEventListener("afterprint", after); return () => window.removeEventListener("afterprint", after); }, []);
   const [printing, setPrinting] = useState<string | null>(null); // orderId in corso
+  const printingRef = useRef<string | null>(null); // lock sincrono anti-doppio-click
   const doPrint = async (o: Order) => {
     if (!o.id) return;
+    // Lock sincrono: blocca immediatamente senza aspettare il re-render React
+    if (printingRef.current) return;
+    printingRef.current = o.id;
     setPrinting(o.id);
     try {
       const r = await fetch(`/api/comanda-txt?order_id=${encodeURIComponent(o.id)}`);
@@ -835,8 +840,15 @@ function OrdiniSection() {
     } catch (err) {
       // L'utente ha annullato il dialog Bluetooth: non è un errore
       if (err instanceof DOMException && err.name === "NotFoundError") return;
-      alert("Errore stampa comanda");
+      // Log su Firestore per troubleshooting remoto
+      await logBLE("error", "Errore in doPrint (AdminCassa)", {
+        detail: err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err),
+      });
+      // Timeout o connessione BLE persa: messaggio specifico
+      const msg = err instanceof Error ? err.message : "Errore sconosciuto";
+      alert(`Errore stampa: ${msg}\n\nRiprova — se il problema persiste, riavvia il Bluetooth.`);
     } finally {
+      printingRef.current = null;
       setPrinting(null);
     }
   };

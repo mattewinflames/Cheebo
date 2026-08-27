@@ -174,5 +174,14 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    /* ------------------------------------------------------------ LOGS (TEMPORANEO)
+       Log di debug BLE scritti dal browser. Lettura solo admin.
+       ⚠️  Rimuovere questa regola e la collection dopo aver risolto
+       i problemi di stampa Bluetooth. */
+    match /logs/{doc} {
+      allow read: if isAdmin();
+      allow write: if true; // Il browser non è autenticato durante la stampa
+    }
   }
 }

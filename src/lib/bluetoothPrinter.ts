@@ -16,6 +16,8 @@ interface BLEProfile {
   charUUID: string;
 }
 
+import { logBLE } from "./bleLogger.js";
+
 const PROFILES: BLEProfile[] = [
   // Profilo Custom Serial — più comune nelle termiche 58mm cinesi
   { serviceUUID: '000018f0-0000-1000-8000-00805f9b34fb', charUUID: '00002af1-0000-1000-8000-00805f9b34fb' },
@@ -81,35 +83,40 @@ async function connectWithProfile(
 export async function printESCPOS(textContent: string): Promise<void> {
   // Richiedi dispositivo solo se non ancora selezionato
   if (!cachedDevice) {
+    await logBLE("info", "Apertura dialog selezione dispositivo BLE");
     cachedDevice = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: PROFILES.map(p => p.serviceUUID),
     });
+    await logBLE("info", "Dispositivo selezionato", { deviceName: cachedDevice.name ?? "sconosciuto" });
     cachedChar = null;
   }
 
   // Se la connessione GATT è caduta (tab in background, schermo spento, ecc.)
   // resetta la char e riconnetti
   if (!cachedDevice.gatt?.connected) {
+    await logBLE("warn", "GATT disconnesso — riconnessione in corso", { deviceName: cachedDevice.name ?? "sconosciuto" });
     cachedChar = null;
   }
 
   // Connetti (o riconnetti) e trova la caratteristica
   if (!cachedChar) {
+    await logBLE("info", "Connessione GATT in corso...", { deviceName: cachedDevice.name ?? "sconosciuto" });
     let lastErr: unknown;
     for (const profile of PROFILES) {
       try {
         cachedChar = await connectWithProfile(cachedDevice, profile);
+        await logBLE("info", `Profilo BLE trovato: ${profile.serviceUUID.slice(0, 8)}...`, { deviceName: cachedDevice.name ?? "sconosciuto" });
         break;
       } catch (e) {
+        await logBLE("warn", `Profilo ${profile.serviceUUID.slice(0, 8)} non compatibile`, { detail: String(e) });
         lastErr = e;
       }
     }
     if (!cachedChar) {
-      throw new Error(
-        `Nessun profilo BLE compatibile trovato sulla stampante. ` +
-        `Usa nRF Connect per verificare gli UUID.\n${lastErr}`,
-      );
+      const errMsg = `Nessun profilo BLE compatibile trovato sulla stampante. Usa nRF Connect per verificare gli UUID.\n${lastErr}`;
+      await logBLE("error", "Nessun profilo BLE compatibile", { detail: errMsg, deviceName: cachedDevice.name ?? "sconosciuto" });
+      throw new Error(errMsg);
     }
   }
 
@@ -125,19 +132,25 @@ export async function printESCPOS(textContent: string): Promise<void> {
   payload.set(textBytes, ESC_INIT.length);
   payload.set(FEED_CUT, ESC_INIT.length + textBytes.length);
 
+  await logBLE("info", `Invio payload ${payload.length} byte alla stampante...`, { deviceName: cachedDevice.name ?? "sconosciuto" });
+
   try {
     await writeChunked(cachedChar, payload);
+    await logBLE("info", "Stampa completata con successo", { deviceName: cachedDevice.name ?? "sconosciuto" });
     // Pausa per permettere alla stampante di digerire gli ultimi byte
     // prima di disconnettere — evita inceppamenti su stampe ravvicinate
     await new Promise(r => setTimeout(r, 600));
   } catch (err) {
+    await logBLE("error", "Errore durante writeChunked", {
+      detail: err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err),
+      deviceName: cachedDevice.name ?? "sconosciuto",
+    });
     cachedChar = null;
     throw err;
   } finally {
-    // Disconnessione esplicita dopo ogni stampa: svuota il buffer BLE
-    // e porta la stampante in stato "pronto" per la stampa successiva.
-    // La riconnessione al click successivo è automatica.
+    // Disconnessione esplicita dopo ogni stampa
     try { cachedDevice?.gatt?.disconnect(); } catch { /* ignora */ }
     cachedChar = null;
+    await logBLE("info", "Disconnessione GATT post-stampa");
   }
 }
