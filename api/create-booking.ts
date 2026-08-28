@@ -127,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         orderId: nexiOrderId,
         amount: amountCents,
         currency: "EUR",
-        description: `Cheebo — ${resolved.items.length} prodott${resolved.items.length === 1 ? "o" : "i"}`,
+        description: `Cheebo - ${resolved.items.length} prodott${resolved.items.length === 1 ? "o" : "i"}`,
         customField: holdRef.id, // holdId completo nel campo libero (max 255 char)
       },
       paymentSession: {
