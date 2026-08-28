@@ -8,7 +8,7 @@
  * ignorati silenziosamente (è un tool di debug, non produzione).
  */
 
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 
 export type BLELogLevel = "info" | "warn" | "error";
@@ -19,7 +19,8 @@ export interface BLELogEntry {
   detail?: string;       // stack trace o dettaglio extra
   deviceName?: string;   // nome dispositivo BLE se disponibile
   ua: string;            // userAgent del browser/tablet
-  ts: unknown;           // serverTimestamp Firestore
+  clientTs: string;      // ISO timestamp client — usa questo per ordinare
+  ts: unknown;           // serverTimestamp Firestore (con latenza)
 }
 
 /**
@@ -43,13 +44,16 @@ export async function logBLE(
       detail: opts?.detail,
       deviceName: opts?.deviceName,
       ua: navigator.userAgent,
-      ts: serverTimestamp(),
+      clientTs: new Date().toISOString(), // timestamp client — preciso, ordinabile
+      ts: serverTimestamp(),              // timestamp server — per riferimento
     };
     // Rimuove i campi undefined (Firestore non li accetta)
     const clean = Object.fromEntries(
       Object.entries(entry).filter(([, v]) => v !== undefined),
     );
-    await addDoc(collection(db, "logs"), clean);
+    // ID documento: timestamp ISO + random suffix → ordinamento naturale nella console Firebase
+    const docId = `${new Date().toISOString().replace(/[:.]/g, "-")}_${Math.random().toString(36).slice(2, 7)}`;
+    await setDoc(doc(collection(db, "logs"), docId), clean);
   } catch {
     // Ignora silenziosamente — il log non deve mai rompere la stampa
   }
