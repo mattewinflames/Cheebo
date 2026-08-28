@@ -80,14 +80,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })();
 
   const righe: string[] = [
-    "", "", // spazio per molletta
-    ctr("*** CHEEBO ***"),
+    "", "", "", "", // spazio molletta — coperto
+    ctr("*** CHEEBO ***"),                    // coperto
+    dash(),                                   // coperto
+    ...(dataServizio || oraRicezione          // coperto
+      ? [lr(dataServizio ? `Data: ${dataServizio}` : "", oraRicezione ? `Ora: ${oraRicezione}` : "")]
+      : []),
+    ctr("Bite the East Side - La Rustica"),   // coperto
     dash(),
-    ctr(`#${String(o.code ?? "?").padStart(3, "0")}`),
-    ctr(`PRONTO ALLE  ${fmtOra(o.readyMin)}`),
+    // — VISIBILE — da qui in poi sempre sotto il reggi-comande
+    lr("TOTALE", fmtEuro(o.total ?? 0)),
+  ];
+
+  if (o.serviceCharge && o.serviceCharge > 0) {
+    righe.push(lr("  Costo servizio", fmtEuro(o.serviceCharge)));
+    const prodotti = Math.round(((o.total ?? 0) - o.serviceCharge) * 100) / 100;
+    righe.push(lr("  Prodotti", fmtEuro(prodotti)));
+  }
+
+  righe.push(
+    lr("Pagamento", o.pay === "online" ? "PAGATO" : "IN LOCO"),
     dash(),
     lr("Cliente:", (o.name ?? "").toUpperCase().slice(0, W - 9)),
-  ];
+  );
 
   if (o.phone) righe.push(lr("Tel:", o.phone.slice(0, W - 5)));
 
@@ -116,26 +131,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (const riga of wrap(item.toUpperCase(), W, indent)) {
       righe.push(riga);
     }
-    if (!isExtra) righe.push(""); // riga vuota tra voci principali per leggibilità
+    if (!isExtra) righe.push(""); // riga vuota tra voci principali
   }
 
   righe.push(
     dash(),
-    lr("TOTALE", fmtEuro(o.total ?? 0)),
-  );
-  if (o.serviceCharge && o.serviceCharge > 0) {
-    righe.push(lr("  Costo servizio", fmtEuro(o.serviceCharge)));
-    const prodotti = Math.round(((o.total ?? 0) - o.serviceCharge) * 100) / 100;
-    righe.push(lr("  Prodotti", fmtEuro(prodotti)));
-  }
-  righe.push(
-    lr("Pagamento", o.pay === "online" ? "PAGATO" : "IN LOCO"),
-    dash(),
-    ctr("*** CHEEBO ***"),
-    ctr("Bite the East Side - La Rustica"),
-    ...(dataServizio || oraRicezione
-      ? [lr(dataServizio ? `Data: ${dataServizio}` : "", oraRicezione ? `Ora: ${oraRicezione}` : "")]
-      : []),
+    ctr(`#${String(o.code ?? "?").padStart(3, "0")}`),
+    ctr(`PRONTO ALLE  ${fmtOra(o.readyMin)}`),
     "",
     "",
   );
