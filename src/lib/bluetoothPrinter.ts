@@ -30,7 +30,7 @@ const ESC_INIT   = new Uint8Array([0x1b, 0x40]);           // ESC @ — reset st
 const FEED_CUT   = new Uint8Array([0x1b, 0x64, 0x04,       // ESC d 4 — avanza 4 righe
                                     0x1d, 0x56, 0x42, 0x00]); // GS V B 0 — taglio parziale
 
-const CHUNK_SIZE = 128; // byte per pacchetto BLE (conservativo, sicuro su tutti i chipset)
+const CHUNK_SIZE = 64; // byte per pacchetto BLE — più piccolo = più robusto su chipset lenti
 
 let cachedDevice: BluetoothDevice | null = null;
 let cachedChar:   BluetoothRemoteGATTCharacteristic | null = null;
@@ -44,7 +44,7 @@ async function writeChunked(
   char: BluetoothRemoteGATTCharacteristic,
   data: Uint8Array,
 ): Promise<void> {
-  const TIMEOUT_MS = 8000; // 8 secondi massimi per l'intera scrittura
+  const TIMEOUT_MS = 20000; // 20 secondi — la Bisofice Z58-01 è lenta su BLE
   const writePromise = (async () => {
     for (let i = 0; i < data.length; i += CHUNK_SIZE) {
       const chunk = data.slice(i, i + CHUNK_SIZE);
@@ -53,7 +53,7 @@ async function writeChunked(
       } else {
         await char.writeValue(chunk);
       }
-      await new Promise(r => setTimeout(r, 20));
+      await new Promise(r => setTimeout(r, 40)); // 40ms tra chunk — più robusto su chipset lenti
     }
   })();
 
@@ -134,6 +134,10 @@ export async function printESCPOS(textContent: string): Promise<void> {
 
   await logBLE("info", `Invio payload ${payload.length} byte alla stampante...`, { deviceName: cachedDevice.name ?? "sconosciuto" });
 
+  // Invia prima un ESC @ (reset) separato per sbloccare eventuali stati inconsistenti
+  try { await writeChunked(cachedChar, ESC_INIT); } catch { /* ignora — è solo un reset preventivo */ }
+  await new Promise(r => setTimeout(r, 100));
+
   try {
     await writeChunked(cachedChar, payload);
     await logBLE("info", "Stampa completata con successo", { deviceName: cachedDevice.name ?? "sconosciuto" });
@@ -141,14 +145,17 @@ export async function printESCPOS(textContent: string): Promise<void> {
     // prima di disconnettere — evita inceppamenti su stampe ravvicinate
     await new Promise(r => setTimeout(r, 600));
   } catch (err) {
-    await logBLE("error", "Errore durante writeChunked", {
+    await logBLE("error", "Errore durante writeChunked — reset device completo", {
       detail: err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err),
       deviceName: cachedDevice.name ?? "sconosciuto",
     });
+    // Reset completo: azzera anche cachedDevice così il prossimo click
+    // mostra il dialog di selezione invece di ritentare su un device inconsistente
     cachedChar = null;
+    cachedDevice = null;
     throw err;
   } finally {
-    // Disconnessione esplicita dopo ogni stampa
+    // Disconnessione esplicita dopo ogni stampa (successo o errore)
     try { cachedDevice?.gatt?.disconnect(); } catch { /* ignora */ }
     cachedChar = null;
     await logBLE("info", "Disconnessione GATT post-stampa");
