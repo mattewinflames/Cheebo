@@ -237,10 +237,10 @@ export default function Prenotazioni() {
             <Ghost t="Burgers" />
             {menu.filter((m) => m.type === "burger" && !m.special).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
             {menu.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: "16px 0" }}>Caricamento menu…</div>}
-            {(["side", "dolce", "drink"] as const).map((t) => {
+            {(["side", "salsa", "dolce", "drink"] as const).map((t) => {
               const items = menu.filter((m) => m.type === t);
               if (items.length === 0) return null;
-              const title = t === "side" ? "Sides" : t === "dolce" ? "Dolci" : "Drinks";
+              const title = t === "side" ? "Sides" : t === "salsa" ? "Salse" : t === "dolce" ? "Dolci" : "Drinks";
               return (
                 <div key={t}>
                   <Ghost t={title} />
@@ -623,6 +623,7 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty }: {
   const [ex, setEx] = useState<Record<string, number>>({});
   const [removed, setRemoved] = useState<string[]>([]);
   const [swaps, setSwaps] = useState<string[]>([]);
+  const [sideChoice, setSideChoice] = useState<"normali" | "dolci">("normali");
   const f = FORMATS[fmtId];
   const ingredients = ingredientsOf(item);
   // bibita compresa: la prima senza sovrapprezzo, altrimenti la prima disponibile
@@ -632,7 +633,7 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty }: {
   const cfg: PaninoConfig = {
     item, format: fmtId, type, drink,
     extras: EXTRA.map((e) => ({ ...e, q: ex[e.id] || 0 })).filter((e) => e.q > 0),
-    removed, swaps,
+    removed, swaps, sideChoice,
   };
   const price = cartPrice(cfg);
   const inCart = Object.keys(cart).filter((k) => k.startsWith(item.id + "|")).reduce((s, k) => s + cart[k].qty, 0);
@@ -645,7 +646,7 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty }: {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, [open]);
-  const reset = () => { setOpen(false); setEx({}); setRemoved([]); setSwaps([]); setDrinkId(""); setType("panino"); setFmtId("singolo"); };
+  const reset = () => { setOpen(false); setEx({}); setRemoved([]); setSwaps([]); setDrinkId(""); setType("panino"); setFmtId("singolo"); setSideChoice("normali"); };
   const add = () => {
     const line = cartLineOf(cfg);
     // per gli special non si può superare i pezzi rimasti (il controllo vero
@@ -741,7 +742,32 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty }: {
                   </div>); })}
               </div>
 
-              {/* 3 · accessorio del menu: la bibita, in fondo */}
+              {/* 3 · scelta patatine nel menu */}
+              {type === "menu" && (
+                <div style={{ marginTop: 14 }}>
+                  <Label>Patatine</Label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {(["normali", "dolci"] as const).map((s) => {
+                      const on = sideChoice === s;
+                      return (
+                        <button key={s} onClick={() => setSideChoice(s)}
+                          style={{ display: "flex", alignItems: "center", gap: 9, textAlign: "left", cursor: "pointer",
+                                   background: on ? C.blue : C.surface, color: on ? "#fff" : C.ink,
+                                   border: `1px solid ${on ? C.blue : C.line}`, borderRadius: 10, padding: "10px 12px" }}>
+                          <span style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0, border: `2px solid ${on ? "#fff" : C.muted}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {on && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff" }} />}
+                          </span>
+                          <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600 }}>
+                            {s === "normali" ? "Patatine fritte" : "Patate dolci"}
+                          </span>
+                          {s === "dolci" && <span style={{ fontSize: 12, fontWeight: 700, color: on ? "#fff" : C.blue }}>+{euro(1)}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* 4 · accessorio del menu: la bibita, in fondo */}
               {type === "menu" && (
                 <div style={{ marginTop: 14 }}>
                   <Label>Bibita compresa</Label>

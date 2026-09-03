@@ -22,7 +22,7 @@ const STATUS: Record<OrderStatus, { label: string; color: string; next: OrderSta
   in_consegna: { label: "In consegna", color: C.amber, next: "consegnato", action: "Segna consegnato" },
   consegnato: { label: "Consegnato", color: C.green, next: null, action: null },
 };
-const SECTIONS: { type: MenuType; label: string }[] = [{ type: "smash", label: "Smashburgers" }, { type: "burger", label: "Burgers" }, { type: "side", label: "Sides" }, { type: "dolce", label: "Dolci" }, { type: "drink", label: "Drinks" }];
+const SECTIONS: { type: MenuType; label: string }[] = [{ type: "smash", label: "Smashburgers" }, { type: "burger", label: "Burgers" }, { type: "side", label: "Sides" }, { type: "salsa", label: "Salse" }, { type: "dolce", label: "Dolci" }, { type: "drink", label: "Drinks" }];
 
 export default function AdminCassa() {
   const [user, setUser] = useState<User | null | undefined>(undefined);

@@ -27,7 +27,7 @@ export const EXTRA: ExtraItem[] = [
 ];
 
 // ---- Voce di menu (Firestore) ----
-export type MenuType = "smash" | "burger" | "side" | "dolce" | "drink";
+export type MenuType = "smash" | "burger" | "side" | "dolce" | "drink" | "salsa";
 export const isPanino = (t: MenuType): boolean => t === "smash" || t === "burger";
 
 export interface MenuItem {
@@ -128,7 +128,7 @@ export const SPECIAL_LOW = 10;
  *  si vuole (id, formato, opzioni), MAI il prezzo: quello lo decide il server
  *  leggendo il menù. È ciò che il client invia a /api/create-booking (#40/#41). */
 export type CartReq =
-  | { kind: "panino"; itemId: string; format: FormatId; type: CartType; drinkId?: string; extras?: { id: string; q: number }[]; removed?: string[]; swaps?: string[] }
+  | { kind: "panino"; itemId: string; format: FormatId; type: CartType; drinkId?: string; extras?: { id: string; q: number }[]; removed?: string[]; swaps?: string[]; sideChoice?: "normali" | "dolci" }
   | { kind: "special"; itemId: string }
   | { kind: "simple"; itemId: string };
 
@@ -164,7 +164,12 @@ export interface PaninoConfig {
   removed?: string[];
   /** id delle sostituzioni scelte, fra quelle previste dal panino */
   swaps?: string[];
+  /** scelta del side nel menu: "normali" (default, nessun sovrapprezzo) o "dolci" (+1€) */
+  sideChoice?: "normali" | "dolci";
 }
+
+/** Sovrapprezzo patate dolci nel menu. */
+export const SIDE_DOLCI_SURCHARGE = 1.0;
 
 const sig = (c: PaninoConfig) => ({
   ex: (c.extras ?? []).filter((e) => e.q > 0).sort((a, b) => a.id.localeCompare(b.id)),
@@ -176,16 +181,20 @@ const sig = (c: PaninoConfig) => ({
 export function cartKey(c: PaninoConfig): string {
   const { ex, rm, sw } = sig(c);
   const drink = c.type === "menu" && c.drink ? c.drink.id : "";
+  const side = c.type === "menu" ? (c.sideChoice ?? "normali") : "";
   return [c.item.id, c.format, c.type, drink,
           ex.map((e) => `${e.id}x${e.q}`).join(","), rm.join(","),
-          sw.map((s) => s.id).join(",")].join("|");
+          sw.map((s) => s.id).join(","), side].join("|");
 }
 
 /** Etichetta leggibile in comanda. */
 export function cartLabel(c: PaninoConfig): string {
   const { ex, rm, sw } = sig(c);
   let s = `${c.item.name} ${FORMATS[c.format].label.toLowerCase()}`;
-  if (c.type === "menu") s += ` · menu${c.drink ? ` con ${c.drink.name.toLowerCase()}` : ""}`;
+  if (c.type === "menu") {
+    s += ` · menu${c.drink ? ` con ${c.drink.name.toLowerCase()}` : ""}`;
+    if (c.sideChoice === "dolci") s += " · patate dolci";
+  }
   if (sw.length) s += " · con " + sw.map((x) => x.name.toLowerCase()).join(", ");
   if (ex.length) s += " + " + ex.map((e) => (e.q > 1 ? `${e.q}× ` : "") + e.name.toLowerCase()).join(", ");
   if (rm.length) s += " · senza " + rm.map((r) => r.toLowerCase()).join(", ");
@@ -196,7 +205,8 @@ export function cartPrice(c: PaninoConfig): number {
   const surch = c.type === "menu" && c.drink ? menuDrinkSurcharge(c.drink) : 0;
   const ex = (c.extras ?? []).reduce((s, e) => s + e.price * e.q, 0);
   const sw = sig(c).sw.reduce((s, x) => s + (x.price ?? 0), 0);
-  return paninoPrice(c.item, c.format, c.type, surch) + ex + sw;
+  const side = c.type === "menu" && c.sideChoice === "dolci" ? SIDE_DOLCI_SURCHARGE : 0;
+  return paninoPrice(c.item, c.format, c.type, surch) + ex + sw + side;
 }
 
 /** Riga di carrello pronta, con i patty già calcolati sulla regola piastra. */
@@ -210,6 +220,7 @@ export const cartLineOf = (c: PaninoConfig): Omit<CartLine, "qty"> => ({
     ...(c.extras && c.extras.some((e) => e.q > 0) ? { extras: c.extras.filter((e) => e.q > 0).map((e) => ({ id: e.id, q: e.q })) } : {}),
     ...(c.removed && c.removed.length ? { removed: c.removed } : {}),
     ...(c.swaps && c.swaps.length ? { swaps: c.swaps } : {}),
+    ...(c.type === "menu" && c.sideChoice ? { sideChoice: c.sideChoice } : {}),
   },
 });
 
