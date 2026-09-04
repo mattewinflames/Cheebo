@@ -50,6 +50,8 @@ export interface MenuItem {
    *  alternative a un componente esistente, non aggiunte: per questo stanno
    *  in una sezione a sé e non fra gli extra. */
   swaps?: SwapOption[];
+  /** Se true, il panino esiste solo nel formato singolo — non mostrare il formato nell'etichetta. */
+  singleFormatOnly?: boolean;
   /** Proposta speciale a disponibilità limitata (vedi SpecialConfig). */
   special?: SpecialConfig;
   // voci semplici (side | dolce | drink)
@@ -190,7 +192,9 @@ export function cartKey(c: PaninoConfig): string {
 /** Etichetta leggibile in comanda. */
 export function cartLabel(c: PaninoConfig): string {
   const { ex, rm, sw } = sig(c);
-  let s = `${c.item.name} ${FORMATS[c.format].label.toLowerCase()}`;
+  let s = c.item.singleFormatOnly
+    ? c.item.name
+    : `${c.item.name} ${FORMATS[c.format].label.toLowerCase()}`;
   if (c.type === "menu") {
     s += ` · menu${c.drink ? ` con ${c.drink.name.toLowerCase()}` : ""}`;
     if (c.sideChoice === "dolci") s += " · patate dolci";

@@ -1022,40 +1022,77 @@ function OrdiniSection() {
 
 /* ---------------- INCASSI ---------------- */
 function IncassiSection() {
-  const sessions = useMemo(() => upcomingSessions(), []);
-  const active = useMemo(() => resolveService(), []);
-  const [sessionKey, setSessionKey] = useState(active?.serviceKey ?? sessions[0]?.serviceKey ?? "");
-  const session = sessions.find((s) => s.serviceKey === sessionKey) ?? sessions[0];
+  const oggi = new Date().toISOString().slice(0, 10);
+  const [from, setFrom] = useState(oggi);
+  const [to, setTo]     = useState(oggi);
   const [orders, setOrders] = useState<Order[]>([]);
-  useEffect(() => { if (sessionKey) return subscribeOrders(sessionKey, setOrders); }, [sessionKey]);
+  const [loading, setLoading] = useState(false);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
 
-  const rows = [...orders].sort((a, b) => a.readyMin - b.readyMin);
-  const tot = orders.reduce((s, o) => s + (o.total ?? 0), 0);
+  // Carica gli ordini ogni volta che cambia il range
+  useEffect(() => {
+    if (from > to) { setLoadErr("La data iniziale è successiva a quella finale."); return; }
+    setLoading(true); setLoadErr(null);
+    fetchOrdersRange(from, to)
+      .then(setOrders)
+      .catch(() => setLoadErr("Errore nel caricamento degli ordini."))
+      .finally(() => setLoading(false));
+  }, [from, to]);
+
+  const rows = [...orders].sort((a, b) => a.serviceKey.localeCompare(b.serviceKey) || a.readyMin - b.readyMin);
+  const tot    = orders.reduce((s, o) => s + (o.total ?? 0), 0);
   const online = orders.filter((o) => o.pay === "online").reduce((s, o) => s + (o.total ?? 0), 0);
-  const cassa = tot - online;
+  const cassa  = tot - online;
+
+  const dateInp: React.CSSProperties = { ...inp, padding: "9px 11px", fontSize: 13.5 };
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
-        <SessionPicker sessions={sessions} value={sessionKey} onChange={setSessionKey} />
+      {/* Selettore range date — controlla sia la lista che l'export */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 18 }}>
+        <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>Dal</span>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={dateInp} />
+        <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>Al</span>
+        <input type="date" value={to}   onChange={(e) => setTo(e.target.value)}   style={dateInp} />
+        {from === oggi && to === oggi && <span style={{ fontSize: 12, color: C.muted }}>Oggi</span>}
+        {(from !== oggi || to !== oggi) && (
+          <button onClick={() => { setFrom(oggi); setTo(oggi); }}
+            style={{ fontSize: 12, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+            Torna a oggi
+          </button>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 18 }}>
-        <Money label="Incasso totale" value={tot} big />
-        <Money label="Pagato online" value={online} color={C.green} />
-        <Money label="Incassato in cassa" value={cassa} color={C.blue} />
+        <Money label="Incasso totale"     value={tot}    big />
+        <Money label="Pagato online"      value={online} color={C.green} />
+        <Money label="Incassato in cassa" value={cassa}  color={C.blue} />
       </div>
 
-      {rows.length === 0 ? (
-        <div style={{ color: C.muted, fontSize: 14, padding: "18px 0" }}>Nessun incasso per questo servizio.</div>
-      ) : (
+      {loading && <div style={{ color: C.muted, fontSize: 14, padding: "18px 0" }}>Caricamento…</div>}
+      {loadErr && <div style={{ color: C.redline, fontSize: 13, marginBottom: 12 }}>{loadErr}</div>}
+
+      {!loading && !loadErr && rows.length === 0 && (
+        <div style={{ color: C.muted, fontSize: 14, padding: "18px 0" }}>Nessun incasso nel periodo selezionato.</div>
+      )}
+
+      {!loading && rows.length > 0 && (
         <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
           <div style={{ display: "flex", padding: "10px 14px", background: C.surface, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: C.muted, fontWeight: 700 }}>
-            <span style={{ flex: 1 }}>Cliente</span><span style={{ width: 70, textAlign: "center" }}>Pronto</span><span style={{ width: 182, textAlign: "center" }}>Pagamento</span><span style={{ width: 90, textAlign: "right" }}>Importo</span>
+            <span style={{ flex: 1 }}>Cliente</span>
+            <span style={{ width: 130, textAlign: "center" }}>Servizio</span>
+            <span style={{ width: 70,  textAlign: "center" }}>Pronto</span>
+            <span style={{ width: 182, textAlign: "center" }}>Pagamento</span>
+            <span style={{ width: 90,  textAlign: "right"  }}>Importo</span>
           </div>
           {rows.map((o, i) => (
             <div key={o.id} style={{ display: "flex", alignItems: "center", padding: "11px 14px", borderTop: i === 0 ? "none" : `1px solid ${C.line}`, fontSize: 14 }}>
-              <span style={{ flex: 1, fontWeight: 600, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><span style={{ color: C.muted, fontWeight: 700 }}>#{o.code ?? "—"}</span> {o.name}</span>
+              <span style={{ flex: 1, fontWeight: 600, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ color: C.muted, fontWeight: 700 }}>#{o.code ?? "—"}</span> {o.name}
+              </span>
+              <span style={{ width: 130, textAlign: "center", color: C.muted, fontSize: 12 }}>
+                {o.serviceKey.slice(0, 10)} {o.serviceKey.split("-").slice(3).join("-")}
+              </span>
               <span style={{ width: 70, textAlign: "center", color: C.muted }}>{fmt(o.readyMin)}</span>
               <span style={{ width: 182, textAlign: "center" }}>
                 <PagamentoBadge pay={o.pay} tender={o.tender} />
@@ -1069,11 +1106,12 @@ function IncassiSection() {
           </div>
         </div>
       )}
+
       <div style={{ marginTop: 14, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
         "Online" = pagato dal cliente sul sito. "Cassa" = incassato al banco, con contanti o carta. La colonna a destra è l'importo di ciascun ordine.
       </div>
 
-      <ExportPanel defaultDate={sessionKey.slice(0, 10) || new Date().toISOString().slice(0, 10)} />
+      <ExportPanel from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
     </div>
   );
 }
@@ -1083,10 +1121,7 @@ function IncassiSection() {
    ⚠️ Non è una chiusura fiscale: serve a riconciliare gli incassi (contanti /
    carta / online) con la chiusura giornaliera del registratore telematico.
    ========================================================================== */
-function ExportPanel({ defaultDate }: { defaultDate: string }) {
-  const [from, setFrom] = useState(defaultDate);
-  const [to, setTo] = useState(defaultDate);
-  useEffect(() => { setFrom(defaultDate); setTo(defaultDate); }, [defaultDate]);
+function ExportPanel({ from, to, onFromChange, onToChange }: { from: string; to: string; onFromChange: (v: string) => void; onToChange: (v: string) => void }) {
   const [formato, setFormato] = useState<"xlsx" | "csv">("xlsx");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -1128,11 +1163,11 @@ function ExportPanel({ defaultDate }: { defaultDate: string }) {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 13 }}>
         <label style={{ flex: "1 1 150px" }}>
           <div style={{ fontSize: 10.5, letterSpacing: 1.2, textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 5 }}>Dal</div>
-          <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} style={dateInp} />
+          <input type="date" value={from} max={to} onChange={(e) => onFromChange(e.target.value)} style={dateInp} />
         </label>
         <label style={{ flex: "1 1 150px" }}>
           <div style={{ fontSize: 10.5, letterSpacing: 1.2, textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 5 }}>Al</div>
-          <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} style={dateInp} />
+          <input type="date" value={to} min={from} onChange={(e) => onToChange(e.target.value)} style={dateInp} />
         </label>
       </div>
 
