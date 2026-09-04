@@ -764,7 +764,7 @@ function SessionPicker({ sessions, value, onChange }: { sessions: UpcomingSessio
           <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 30, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 14px 40px rgba(27,27,71,.18)", padding: 12, width: "min(340px,86vw)" }}>
             <div style={{ fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>Giorno</div>
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(days.length, 7)},1fr)`, gap: 5, marginBottom: 12 }}>
-              {days.map((d) => {
+              {[...days].sort((a, b) => a.dayKey.localeCompare(b.dayKey)).map((d) => {
                 const on = d.dayKey === curDayKey; const tok = d.dateLabel.split(" ");
                 return <button key={d.dayKey} onClick={() => pickDay(d)} style={{ textAlign: "center", borderRadius: 9, padding: "7px 2px", cursor: "pointer", border: `1px solid ${on ? C.blue : C.line}`, background: on ? C.blue : "#fff", color: on ? "#fff" : C.ink }}>
                   <div style={{ fontSize: 10, textTransform: "uppercase", opacity: 0.75 }}>{d.dayLabel === "Oggi" ? "Oggi" : tok[0]}</div>
