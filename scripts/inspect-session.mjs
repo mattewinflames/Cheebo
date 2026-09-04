@@ -113,17 +113,20 @@ if (holdsSnap.empty) {
 
 /* RIEPILOGO PATTY */
 console.log(`\n\n📊  RIEPILOGO PATTY`);
-let totOrders = 0, totHoldsPagati = 0, totHoldsAttesa = 0;
+console.log(`   (Il ledger è l'autorità — gli holds pagati NON vanno sommati agli orders)`);
+let totOrders = 0, totHoldsScaduti = 0, totHoldsAttesa = 0;
 for (const d of ordersSnap.docs) { totOrders += (d.data().patties ?? 0); }
 for (const d of holdsSnap.docs) {
   const h = d.data();
-  const p = h.patties ?? h.cells?.reduce((s,v) => s+(v||0), 0) ?? 0;
-  if (h.status === "pagato") totHoldsPagati += p;
+  const p = h.patties ?? h.cells?.reduce((s, v) => s + (v || 0), 0) ?? 0;
+  if (h.status === "scaduto") totHoldsScaduti += p;
   else if (h.status === "attesa") totHoldsAttesa += p;
 }
-console.log(`   Orders confermati: ${totOrders} patty`);
-console.log(`   Holds pagati:      ${totHoldsPagati} patty`);
-console.log(`   Holds in attesa:   ${totHoldsAttesa} patty (potenziali fantasmi)`);
-console.log(`   TOTALE ledger:     ${totOrders + totHoldsPagati + totHoldsAttesa} patty\n`);
+const ledgerTot = Object.values(sessionDoc.exists ? (sessionDoc.data()?.ledger ?? {}) : {}).reduce((s, v) => s + (Number(v) || 0), 0);
+console.log(`   Orders confermati:  ${totOrders} patty`);
+console.log(`   Holds scaduti:      ${totHoldsScaduti} patty (già sottratti dal ledger dal cron)`);
+console.log(`   Holds in attesa:    ${totHoldsAttesa} patty ⚠️  (occupano slot reali)`);
+console.log(`   Ledger totale:      ${ledgerTot} patty (fonte di verità — include holds pagati + in attesa)`);
+console.log(`   Patty reali attesi: ${totOrders} patty (solo orders confermati)\n`);
 
 process.exit(0);

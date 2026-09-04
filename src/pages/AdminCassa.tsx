@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { auth } from "../lib/firebase";
-import { upcomingSessions, pastSessions, resolveService, dateKey, type UpcomingSession } from "../lib/schedule";
+import { upcomingSessions, resolveService, dateKey, type UpcomingSession } from "../lib/schedule";
 import { CAP, totalWindows, windowStartMin, windowEndMin, planFirst, fmt, type Service } from "../lib/dispatch";
 import { subscribeOrders, subscribeLedger, setStatus, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
 import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore";
@@ -788,78 +788,6 @@ function SessionPicker({ sessions, value, onChange }: { sessions: UpcomingSessio
   );
 }
 
-/** Selettore sessione per Incassi — griglia originale + frecce ←→ per navigare nello storico. */
-function IncassiSessionPicker({ sessions, value, onChange }: { sessions: UpcomingSession[]; value: string; onChange: (k: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const sorted = [...sessions].sort((a, b) => b.serviceKey.localeCompare(a.serviceKey));
-  const idx = sorted.findIndex((s) => s.serviceKey === value);
-  const cur = sorted[idx] ?? sorted[0];
-  const label = cur ? `${cur.dayLabel} — ${cur.label}` : "Nessun servizio";
-
-  const allDates = [...new Set(sorted.map(s => s.serviceKey.slice(0, 10)))];
-  const curDate = cur?.serviceKey.slice(0, 10) ?? "";
-  const curDateIdx = allDates.indexOf(curDate);
-  const windowDates = new Set(allDates.slice(Math.max(0, curDateIdx - 3), curDateIdx + 4));
-  const days: DayGroup[] = [];
-  sorted.filter(s => windowDates.has(s.serviceKey.slice(0, 10))).forEach((s) => {
-    const dk = s.serviceKey.slice(0, 10);
-    let d = days.find((x) => x.dayKey === dk);
-    if (!d) { d = { dayKey: dk, dayLabel: s.dayLabel, dateLabel: s.dateLabel, services: [] }; days.push(d); }
-    d.services.push(s);
-  });
-  days.sort((a, b) => b.dayKey.localeCompare(a.dayKey));
-  const curDay = days.find(d => d.dayKey === curDate);
-
-  const pickDay = (d: DayGroup) => {
-    const keep = d.services.find(s => s.label === cur?.label) ?? d.services[0];
-    onChange(keep.serviceKey); setOpen(false);
-  };
-  const pickSvc = (s: UpcomingSession) => { onChange(s.serviceKey); setOpen(false); };
-  const canPrev = idx < sorted.length - 1;
-  const canNext = idx > 0;
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <button onClick={() => canPrev && onChange(sorted[idx + 1].serviceKey)}
-        disabled={!canPrev} style={{ ...rndBtn, opacity: canPrev ? 1 : 0.3 }} title="Sessione precedente">‹</button>
-      <div style={{ position: "relative", display: "inline-block" }}>
-        <button onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${open ? C.blue : C.line}`, background: "#fff", borderRadius: 10, padding: "10px 15px", cursor: "pointer", fontWeight: 700, fontSize: 14, color: C.ink }}>
-          <Calendar size={16} /><span>{label}</span><ChevronDown size={15} />
-        </button>
-        {open && (
-          <>
-            <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
-            <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 30, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 14px 40px rgba(27,27,71,.18)", padding: 12, width: "min(340px,86vw)" }}>
-              <div style={{ fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>Giorno</div>
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(days.length, 7)},1fr)`, gap: 5, marginBottom: 12 }}>
-                {days.map((d) => {
-                  const on = d.dayKey === curDate; const tok = d.dateLabel.split(" ");
-                  const isPast = d.dayKey < new Date().toISOString().slice(0, 10);
-                  return <button key={d.dayKey} onClick={() => pickDay(d)} style={{ textAlign: "center", borderRadius: 9, padding: "7px 2px", cursor: "pointer", border: `1px solid ${on ? C.blue : C.line}`, background: on ? C.blue : isPast ? C.surface : "#fff", color: on ? "#fff" : C.ink }}>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", opacity: 0.75 }}>{d.dayLabel === "Oggi" ? "Oggi" : d.dayLabel === "Ieri" ? "Ieri" : tok[0]}</div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{tok[1] ?? ""}</div>
-                  </button>;
-                })}
-              </div>
-              <div style={{ fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>Servizio</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {(curDay?.services ?? []).map((s) => {
-                  const on = s.serviceKey === value;
-                  return <button key={s.serviceKey} onClick={() => pickSvc(s)} style={{ flex: 1, border: `1px solid ${on ? C.blue : C.line}`, background: on ? C.blue : "#fff", color: on ? "#fff" : C.ink, borderRadius: 8, padding: "9px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                    <div>{s.label}</div><div style={{ fontSize: 10.5, opacity: 0.7, fontWeight: 400 }}>{fmt(s.startMin)}–{fmt(s.endMin)}</div>
-                  </button>;
-                })}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-      <button onClick={() => canNext && onChange(sorted[idx - 1].serviceKey)}
-        disabled={!canNext} style={{ ...rndBtn, opacity: canNext ? 1 : 0.3 }} title="Sessione successiva">›</button>
-    </div>
-  );
-}
-
 /* ---------------- ORDINI ---------------- */
 function OrdiniSection() {
   const sessions = useMemo(() => upcomingSessions(), []);
@@ -942,7 +870,7 @@ function OrdiniSection() {
   return (
     <>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
-        <IncassiSessionPicker sessions={sessions} value={sessionKey} onChange={setSessionKey} />
+        <SessionPicker sessions={sessions} value={sessionKey} onChange={setSessionKey} />
         <div style={{ flex: 1 }} />
         <Stat n={orders.length} label="ordini" /><Stat n={totalPatty} label="patty" />
       </div>
@@ -1094,18 +1022,9 @@ function OrdiniSection() {
 
 /* ---------------- INCASSI ---------------- */
 function IncassiSection() {
-  const upcoming = useMemo(() => upcomingSessions(), []);
-  const past     = useMemo(() => pastSessions(new Date(), 30), []);
-  // Tutte le sessioni: passate (più recente prima) + future, senza duplicati
-  const sessions = useMemo(() => {
-    const all = [...past, ...upcoming];
-    const seen = new Set<string>();
-    return all.filter((s) => { if (seen.has(s.serviceKey)) return false; seen.add(s.serviceKey); return true; });
-  }, [past, upcoming]);
+  const sessions = useMemo(() => upcomingSessions(), []);
   const active = useMemo(() => resolveService(), []);
-  // Default: servizio attivo, altrimenti prima sessione passata (ieri), altrimenti la prima disponibile
-  const defaultKey = active?.serviceKey ?? past[0]?.serviceKey ?? upcoming[0]?.serviceKey ?? "";
-  const [sessionKey, setSessionKey] = useState(defaultKey);
+  const [sessionKey, setSessionKey] = useState(active?.serviceKey ?? sessions[0]?.serviceKey ?? "");
   const session = sessions.find((s) => s.serviceKey === sessionKey) ?? sessions[0];
   const [orders, setOrders] = useState<Order[]>([]);
   useEffect(() => { if (sessionKey) return subscribeOrders(sessionKey, setOrders); }, [sessionKey]);
