@@ -106,3 +106,28 @@ export function upcomingSessions(
   }
   return out;
 }
+
+/** Sessioni degli ultimi `daysBehind` giorni (escluso oggi), in ordine cronologico
+ *  decrescente (più recente prima). Usata dalla sezione Incassi dell'admin. */
+export function pastSessions(
+  now: Date = new Date(),
+  daysBehind = 30,
+): UpcomingSession[] {
+  const out: UpcomingSession[] = [];
+  for (let off = 1; off <= daysBehind; off++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - off);
+    const defs = SCHEDULE[d.getDay()] ?? [];
+    const dayLabel = off === 1 ? "Ieri" : `${WEEKDAYS[d.getDay()]} ${d.getDate()}`;
+    for (const def of defs) {
+      const startMin = toMin(def.start);
+      const endMin = endToMin(def.end);
+      out.push({
+        serviceKey: `${dateKey(d)}-${def.label}`,
+        label: def.label, startMin, endMin,
+        dayLabel, dateLabel: `${WEEKDAYS[d.getDay()]} ${d.getDate()}`,
+      });
+    }
+  }
+  return out;
+}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { auth } from "../lib/firebase";
-import { upcomingSessions, resolveService, dateKey, type UpcomingSession } from "../lib/schedule";
+import { upcomingSessions, pastSessions, resolveService, dateKey, type UpcomingSession } from "../lib/schedule";
 import { CAP, totalWindows, windowStartMin, windowEndMin, planFirst, fmt, type Service } from "../lib/dispatch";
 import { subscribeOrders, subscribeLedger, setStatus, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
 import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore";
@@ -736,7 +736,9 @@ type DayGroup = { dayKey: string; dayLabel: string; dateLabel: string; services:
 function SessionPicker({ sessions, value, onChange }: { sessions: UpcomingSession[]; value: string; onChange: (k: string) => void }) {
   const [open, setOpen] = useState(false);
   const days: DayGroup[] = [];
-  sessions.forEach((s) => {
+  // Ordina le sessioni per data decrescente (più recente prima nel picker)
+  const sorted = [...sessions].sort((a, b) => b.serviceKey.localeCompare(a.serviceKey));
+  sorted.forEach((s) => {
     const dk = s.serviceKey.slice(0, 10);
     let d = days.find((x) => x.dayKey === dk);
     if (!d) { d = { dayKey: dk, dayLabel: s.dayLabel, dateLabel: s.dateLabel, services: [] }; days.push(d); }
@@ -763,13 +765,21 @@ function SessionPicker({ sessions, value, onChange }: { sessions: UpcomingSessio
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
           <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 30, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 14px 40px rgba(27,27,71,.18)", padding: 12, width: "min(340px,86vw)" }}>
             <div style={{ fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>Giorno</div>
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(days.length, 7)},1fr)`, gap: 5, marginBottom: 12 }}>
+            {/* Lista scorrevole dei giorni — supporta storico 30gg */}
+            <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 }}>
               {days.map((d) => {
-                const on = d.dayKey === curDayKey; const tok = d.dateLabel.split(" ");
-                return <button key={d.dayKey} onClick={() => pickDay(d)} style={{ textAlign: "center", borderRadius: 9, padding: "7px 2px", cursor: "pointer", border: `1px solid ${on ? C.blue : C.line}`, background: on ? C.blue : "#fff", color: on ? "#fff" : C.ink }}>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", opacity: 0.75 }}>{d.dayLabel === "Oggi" ? "Oggi" : tok[0]}</div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{tok[1] ?? ""}</div>
-                </button>;
+                const on = d.dayKey === curDayKey;
+                const isToday = d.dayLabel === "Oggi";
+                const isPast = d.dayKey < new Date().toISOString().slice(0, 10);
+                return (
+                  <button key={d.dayKey} onClick={() => pickDay(d)}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 9, padding: "8px 12px", cursor: "pointer", border: `1px solid ${on ? C.blue : C.line}`, background: on ? C.blue : isPast ? C.surface : "#fff", color: on ? "#fff" : C.ink, textAlign: "left" }}>
+                    <span style={{ fontWeight: on ? 700 : 500, fontSize: 13.5 }}>
+                      {isToday ? "Oggi" : d.dayLabel}
+                    </span>
+                    <span style={{ fontSize: 12, opacity: 0.7 }}>{d.dateLabel}</span>
+                  </button>
+                );
               })}
             </div>
             <div style={{ fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>Servizio</div>
@@ -1023,9 +1033,18 @@ function OrdiniSection() {
 
 /* ---------------- INCASSI ---------------- */
 function IncassiSection() {
-  const sessions = useMemo(() => upcomingSessions(), []);
+  const upcoming = useMemo(() => upcomingSessions(), []);
+  const past     = useMemo(() => pastSessions(new Date(), 30), []);
+  // Tutte le sessioni: passate (più recente prima) + future, senza duplicati
+  const sessions = useMemo(() => {
+    const all = [...past, ...upcoming];
+    const seen = new Set<string>();
+    return all.filter((s) => { if (seen.has(s.serviceKey)) return false; seen.add(s.serviceKey); return true; });
+  }, [past, upcoming]);
   const active = useMemo(() => resolveService(), []);
-  const [sessionKey, setSessionKey] = useState(active?.serviceKey ?? sessions[0]?.serviceKey ?? "");
+  // Default: servizio attivo, altrimenti prima sessione passata (ieri), altrimenti la prima disponibile
+  const defaultKey = active?.serviceKey ?? past[0]?.serviceKey ?? upcoming[0]?.serviceKey ?? "";
+  const [sessionKey, setSessionKey] = useState(defaultKey);
   const session = sessions.find((s) => s.serviceKey === sessionKey) ?? sessions[0];
   const [orders, setOrders] = useState<Order[]>([]);
   useEffect(() => { if (sessionKey) return subscribeOrders(sessionKey, setOrders); }, [sessionKey]);
