@@ -2,12 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     { "source": "/((?!api/|assets/|@|src/|node_modules/|.*\\..*).*)", "destination": "/" }
-  ],
-  "crons": [
-    {
-      "path": "/api/release-stale-holds",
-      "schedule": "*/5 * * * *"
-    }
   ]
 }
-
