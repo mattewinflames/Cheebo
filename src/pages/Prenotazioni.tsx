@@ -329,7 +329,7 @@ export default function Prenotazioni() {
                 </div>
               </div>
             )}
-            {sessions.length > 0 && (<>
+            {sessions.length > 0 && !bookingBlockedByHour && (<>
             <Label>Giorno e servizio</Label>
             <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 18 }}>
               {sessions.map((s) => (
