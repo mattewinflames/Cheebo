@@ -1,0 +1,24 @@
+name: Release Stale Holds
+
+on:
+  schedule:
+    # Ogni 5 minuti
+    - cron: "*/5 * * * *"
+  # Permette di eseguirlo manualmente dalla tab Actions di GitHub
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call release-stale-holds endpoint
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://cheebo-iota.vercel.app/api/release-stale-holds)
+          echo "HTTP status: $response"
+          if [ "$response" != "200" ]; then
+            echo "❌ Endpoint ha risposto $response"
+            exit 1
+          fi
+          echo "✅ Holds rilasciati correttamente"
