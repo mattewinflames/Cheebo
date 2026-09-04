@@ -47,9 +47,9 @@ async function testCreateHppOrder() {
     console.log('✅ Risposta ricevuta con successo!\n');
     console.log('--------------------------------------------------');
     console.log('🔗 URL Checkout Nexi (Hosted Page):');
-    console.log(data.hostedPage);
+    console.log((data as Record<string, unknown>).hostedPage);
     console.log('--------------------------------------------------');
-    console.log('🔑 Security Token:', data.securityToken);
+    console.log('🔑 Security Token:', (data as Record<string, unknown>).securityToken);
 
   } catch (error) {
     console.error('💥 Errore di rete o di esecuzione:', error);
