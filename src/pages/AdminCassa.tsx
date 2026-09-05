@@ -6,8 +6,9 @@ import { CAP, totalWindows, windowStartMin, windowEndMin, planFirst, fmt, type S
 import { subscribeOrders, subscribeLedger, setStatus, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
 import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore";
 import { fetchOrdersRange, buildRows, summarize, downloadCSV, downloadXLSX } from "../lib/export";
+import { computeAnalytics, prevPeriod, addDays, localISODate, type Analytics } from "../lib/analytics";
 import { euro, isPanino, occupiesGriddle, FORMATS, ingredientsOf, menuDrinkSurcharge, griddlePatty, cartLineOf, cartPrice, cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, specialLeft, type FormatId, type CartType, type CartLine, type MenuItem, type MenuType, type PaninoConfig } from "../lib/menu";
-import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings } from "lucide-react";
+import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings, BarChart2 } from "lucide-react";
 import { subscribeSettings, saveSettings, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
 import { bluetoothSupported, printESCPOS } from "../lib/bluetoothPrinter";
 import { logBLE } from "../lib/bleLogger";
@@ -34,7 +35,7 @@ export default function AdminCassa() {
 }
 
 function AdminShell({ onLogout }: { onLogout: () => void }) {
-  const [tab, setTab] = useState<"cassa" | "ordini" | "incassi" | "menu" | "opzioni">("cassa");
+  const [tab, setTab] = useState<"cassa" | "ordini" | "incassi" | "menu" | "opzioni" | "stats">("cassa");
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   useEffect(() => subscribeSettings(setSettings), []);
 
@@ -66,6 +67,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
               <NavTab icon={<Wallet size={16} />} label="Incassi" on={tab === "incassi"} onClick={() => setTab("incassi")} />
               <NavTab icon={<UtensilsCrossed size={16} />} label="Menu" on={tab === "menu"} onClick={() => setTab("menu")} />
               <NavTab icon={<Settings size={16} />} label="Opzioni" on={tab === "opzioni"} onClick={() => setTab("opzioni")} />
+              <NavTab icon={<BarChart2 size={16} />} label="Stats" on={tab === "stats"} onClick={() => setTab("stats")} />
             </div>
           </div>
         </div>
@@ -76,6 +78,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
             : tab === "ordini" ? <OrdiniSection />
             : tab === "incassi" ? <IncassiSection />
             : tab === "menu" ? <MenuSection />
+            : tab === "stats" ? <StatisticheSection />
             : tab === "opzioni" ? <OpzioniSection settings={settings} />
             : <OrdiniSection />}
           </div>
@@ -1121,6 +1124,343 @@ function IncassiSection() {
    ⚠️ Non è una chiusura fiscale: serve a riconciliare gli incassi (contanti /
    carta / online) con la chiusura giornaliera del registratore telematico.
    ========================================================================== */
+/* ============================================================================
+   STATISTICHE
+   ========================================================================== */
+/* ============================================================================
+   STATISTICHE — Analytics dashboard
+   ========================================================================== */
+
+/* ---------- helpers UI ---------- */
+
+function delta(cur: number, prev: number | undefined): string | null {
+  if (prev === undefined || prev === 0) return null;
+  const pct = ((cur - prev) / prev) * 100;
+  return (pct >= 0 ? "↑ " : "↓ ") + Math.abs(pct).toFixed(1) + "%";
+}
+
+function KpiCard({ label, value, sub, trend }: { label: string; value: string; sub?: string; trend?: string | null }) {
+  const up = trend?.startsWith("↑");
+  const down = trend?.startsWith("↓");
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px" }}>
+      <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.ink, marginBottom: 4 }}>{value}</div>
+      {trend && <div style={{ fontSize: 12, fontWeight: 700, color: up ? C.green : down ? "#ef4444" : C.muted }}>{trend}</div>}
+      {sub && !trend && <div style={{ fontSize: 12, color: C.muted }}>{sub}</div>}
+    </div>
+  );
+}
+
+function MiniBar({ value, max, color = C.blue }: { value: number; max: number; color?: string }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div style={{ flex: 1, height: 7, background: C.line, borderRadius: 4, overflow: "hidden" }}>
+      <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4 }} />
+    </div>
+  );
+}
+
+function RankedList({ title, items, color }: { title: string; items: { name: string; qty: number; pct: number }[]; color?: string }) {
+  const max = items[0]?.qty ?? 1;
+  return (
+    <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>{title}</div>
+      {items.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>Nessun dato</div>}
+      {items.map((item, i) => (
+        <div key={item.name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 11, color: C.muted, width: 14, textAlign: "right" }}>{i + 1}</span>
+          <span style={{ fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+          <MiniBar value={item.qty} max={max} color={color} />
+          <span style={{ fontSize: 12, color: C.muted, width: 28, textAlign: "right" }}>{item.qty}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatisticheSection() {
+  const oggi = localISODate(new Date());
+  const [preset, setPreset] = useState<"oggi" | "7g" | "30g" | "90g" | "custom">("30g");
+  const [customFrom, setCustomFrom] = useState(addDays(oggi, -29));
+  const [customTo,   setCustomTo]   = useState(oggi);
+
+  const { from, to } = useMemo(() => {
+    if (preset === "oggi")   return { from: oggi, to: oggi };
+    if (preset === "7g")     return { from: addDays(oggi, -6), to: oggi };
+    if (preset === "30g")    return { from: addDays(oggi, -29), to: oggi };
+    if (preset === "90g")    return { from: addDays(oggi, -89), to: oggi };
+    return { from: customFrom, to: customTo };
+  }, [preset, oggi, customFrom, customTo]);
+
+  const prev = useMemo(() => prevPeriod(from, to), [from, to]);
+
+  const [orders,     setOrders]     = useState<Order[]>([]);
+  const [prevOrders, setPrevOrders] = useState<Order[]>([]);
+  const [loading,    setLoading]    = useState(false);
+  const [err,        setErr]        = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true); setErr(null);
+    Promise.all([
+      fetchOrdersRange(from, to),
+      fetchOrdersRange(prev.from, prev.to),
+    ]).then(([cur, p]) => { setOrders(cur); setPrevOrders(p); })
+      .catch(() => setErr("Errore nel caricamento."))
+      .finally(() => setLoading(false));
+  }, [from, to, prev.from, prev.to]);
+
+  const stats: Analytics = useMemo(
+    () => computeAnalytics(orders, prevOrders, from, to),
+    [orders, prevOrders, from, to],
+  );
+
+  const dateInp: React.CSSProperties = { ...inp, padding: "8px 10px", fontSize: 13 };
+  const maxFat    = Math.max(...stats.trend.map(d => d.fat), 1);
+  const maxSlot   = Math.max(...stats.slotRitiro.map(s => s.count), 1);
+  const [addOnTab, setAddOnTab] = useState<"extra" | "salse" | "bibite">("extra");
+  const [tooltip, setTooltip] = useState<{ day: typeof stats.trend[0]; x: number; y: number } | null>(null);
+  const [dowTip,  setDowTip]  = useState<typeof stats.byDow[0] | null>(null);
+
+  const PRESETS: { id: typeof preset; label: string }[] = [
+    { id: "oggi", label: "Oggi" },
+    { id: "7g",   label: "7 giorni" },
+    { id: "30g",  label: "30 giorni" },
+    { id: "90g",  label: "90 giorni" },
+    { id: "custom", label: "Personalizzato" },
+  ];
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto" }}>
+
+      {/* ── Filtro ── */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
+        {PRESETS.map(p => (
+          <button key={p.id} onClick={() => setPreset(p.id)}
+            style={{ padding: "7px 13px", borderRadius: 8, border: `1px solid ${preset === p.id ? C.blue : C.line}`,
+                     background: preset === p.id ? C.blue : "#fff", color: preset === p.id ? "#fff" : C.ink,
+                     fontWeight: preset === p.id ? 700 : 400, fontSize: 13, cursor: "pointer" }}>
+            {p.label}
+          </button>
+        ))}
+        {preset === "custom" && (
+          <>
+            <input type="date" value={customFrom} max={customTo} onChange={e => setCustomFrom(e.target.value)} style={dateInp} />
+            <span style={{ fontSize: 12, color: C.muted }}>→</span>
+            <input type="date" value={customTo} min={customFrom} onChange={e => setCustomTo(e.target.value)} style={dateInp} />
+          </>
+        )}
+        {loading && <span style={{ fontSize: 12, color: C.muted, marginLeft: 8 }}>Caricamento…</span>}
+        {err && <span style={{ fontSize: 12, color: "#ef4444" }}>{err}</span>}
+      </div>
+
+      {!loading && orders.length === 0 && !err && (
+        <div style={{ color: C.muted, fontSize: 14, padding: "24px 0" }}>Nessun ordine nel periodo selezionato.</div>
+      )}
+
+      {!loading && orders.length > 0 && (<>
+
+        {/* ── KPI ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
+          <KpiCard label="Ordini"       value={String(stats.ordini)}      trend={delta(stats.ordini, stats.prevOrdini)} />
+          <KpiCard label="Incasso"    value={euro(stats.fatturato)}     trend={delta(stats.fatturato, stats.prevFatturato)} />
+          <KpiCard label="Ordine medio" value={euro(stats.scontrinoMedio)} trend={delta(stats.scontrinoMedio, stats.prevScontrinoMedio)} />
+          <KpiCard label="Con menù"     value={`${Math.round(stats.quotaMenu * 100)}%`} trend={stats.prevQuotaMenu !== undefined ? delta(stats.quotaMenu, stats.prevQuotaMenu) : null} />
+        </div>
+
+        {/* ── Trend ── */}
+        <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, marginBottom: 16, position: "relative" }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>Andamento incassi</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 100, position: "relative" }}>
+            {stats.trend.map(d => {
+              const h = maxFat > 0 ? Math.round((d.fat / maxFat) * 100) : 0;
+              return (
+                <div key={d.date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end", cursor: "pointer" }}
+                  onMouseEnter={e => setTooltip({ day: d, x: e.clientX, y: e.clientY })}
+                  onMouseLeave={() => setTooltip(null)}>
+                  <div style={{ width: "100%", minWidth: 3, height: `${h}%`, minHeight: d.fat > 0 ? 3 : 0,
+                    background: d.fat > 0 ? C.blue : C.line, borderRadius: "3px 3px 0 0",
+                    opacity: tooltip?.day.date === d.date ? 0.7 : 1 }} />
+                </div>
+              );
+            })}
+          </div>
+          {/* Etichette date: solo primo e ultimo */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+            <span style={{ fontSize: 11, color: C.muted }}>{stats.trend[0]?.label}</span>
+            <span style={{ fontSize: 11, color: C.muted }}>{stats.trend[stats.trend.length - 1]?.label}</span>
+          </div>
+          {/* Tooltip */}
+          {tooltip && (
+            <div style={{ position: "fixed", top: tooltip.y - 110, left: tooltip.x - 80, zIndex: 999,
+              background: "#1e1e2e", color: "#fff", borderRadius: 10, padding: "10px 14px",
+              fontSize: 12.5, lineHeight: 1.7, pointerEvents: "none", boxShadow: "0 4px 20px rgba(0,0,0,.3)" }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{tooltip.day.label}</div>
+              <div>Incasso <strong>{euro(tooltip.day.fat)}</strong></div>
+              <div>Ordini <strong>{tooltip.day.ord}</strong></div>
+              {tooltip.day.ord > 0 && <div>Ordine medio <strong>{euro(tooltip.day.avg)}</strong></div>}
+            </div>
+          )}
+        </div>
+
+        {/* ── Panini + Orari ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+          <RankedList title="🍔 Panini più venduti" items={stats.topPanini} color={C.blue} />
+
+          <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>⏰ Orario di ritiro</div>
+            {stats.oraPunta && (
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
+                🔥 Ora di punta: <strong>{stats.oraPunta}</strong>
+                {stats.fasciaPunta && <> · Fascia intensa: <strong>{stats.fasciaPunta}</strong></>}
+              </div>
+            )}
+            <div style={{ maxHeight: 170, overflowY: "auto" }}>
+              {stats.slotRitiro.map(s => (
+                <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                  <span style={{ fontSize: 12, color: C.muted, width: 36 }}>{s.label}</span>
+                  <MiniBar value={s.count} max={maxSlot} color="#f59e0b" />
+                  <span style={{ fontSize: 12, fontWeight: 700, width: 22, textAlign: "right" }}>{s.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Extra / Salse / Bibite (box unico tabbato) + Giorno settimana ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+          {(() => {
+            type AddOnTab = "extra" | "salse" | "bibite";
+            const tabItems: Record<AddOnTab, { name: string; qty: number; pct: number }[]> = {
+              extra:  stats.topExtras,
+              salse:  stats.topSalse,
+              bibite: stats.topBibite,
+            };
+            const tabColor: Record<AddOnTab, string> = {
+              extra: "#10b981", salse: "#8b5cf6", bibite: "#0ea5e9",
+            };
+            const tabs: { id: AddOnTab; label: string }[] = [
+              { id: "extra",  label: "Extra" },
+              { id: "salse",  label: "Salse" },
+              { id: "bibite", label: "Bibite" },
+            ];
+            return (
+              <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+                  {tabs.map(t => (
+                    <button key={t.id} onClick={() => setAddOnTab(t.id)}
+                      style={{ padding: "5px 12px", borderRadius: 7, border: `1px solid ${addOnTab === t.id ? tabColor[t.id] : C.line}`,
+                               background: addOnTab === t.id ? tabColor[t.id] : "#fff",
+                               color: addOnTab === t.id ? "#fff" : C.ink,
+                               fontWeight: addOnTab === t.id ? 700 : 400, fontSize: 12.5, cursor: "pointer" }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {tabItems[addOnTab].length === 0
+                  ? <div style={{ color: C.muted, fontSize: 13 }}>Nessun dato nel periodo.</div>
+                  : tabItems[addOnTab].map((item, i) => {
+                      const max = tabItems[addOnTab][0]?.qty ?? 1;
+                      return (
+                        <div key={item.name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, color: C.muted, width: 14, textAlign: "right" }}>{i + 1}</span>
+                          <span style={{ fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+                          <MiniBar value={item.qty} max={max} color={tabColor[addOnTab]} />
+                          <span style={{ fontSize: 12, color: C.muted, width: 28, textAlign: "right" }}>{item.qty}</span>
+                        </div>
+                      );
+                    })
+                }
+              </div>
+            );
+          })()}
+
+          <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>📅 Per giorno della settimana</div>
+            {stats.byDow.some(d => d.prevFat !== undefined) && (
+              <div style={{ display: "flex", gap: 12, marginBottom: 10, fontSize: 11 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: C.blue, display: "inline-block" }} />Periodo</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: C.line, display: "inline-block" }} />Precedente</span>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 90 }}>
+              {stats.byDow.map(d => {
+                const maxAll = Math.max(...stats.byDow.map(x => Math.max(x.fat, x.prevFat ?? 0)), 1);
+                const h     = Math.round((d.fat / maxAll) * 100);
+                const hPrev = d.prevFat !== undefined ? Math.round((d.prevFat / maxAll) * 100) : null;
+                const diff  = d.prevFat !== undefined && d.prevFat > 0
+                  ? ((d.fat - d.prevFat) / d.prevFat * 100)
+                  : null;
+                return (
+                  <div key={d.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer" }}
+                    onMouseEnter={() => setDowTip(d)} onMouseLeave={() => setDowTip(null)}>
+                    {/* Delta % */}
+                    <div style={{ fontSize: 9, fontWeight: 700, color: diff === null ? "transparent" : diff >= 0 ? C.green : "#ef4444", marginBottom: 1 }}>
+                      {diff !== null ? (diff >= 0 ? "+" : "") + diff.toFixed(0) + "%" : "·"}
+                    </div>
+                    {/* Barre affiancate */}
+                    <div style={{ width: "100%", display: "flex", gap: 1, alignItems: "flex-end", height: 70 }}>
+                      <div style={{ flex: 1, height: `${h}%`, minHeight: d.fat > 0 ? 3 : 0,
+                        background: d.fat > 0 ? C.blue : C.line, borderRadius: "3px 3px 0 0",
+                        opacity: dowTip?.label === d.label ? 0.75 : 1 }} />
+                      {hPrev !== null && (
+                        <div style={{ flex: 1, height: `${hPrev}%`, minHeight: (d.prevFat ?? 0) > 0 ? 3 : 0,
+                          background: C.line, borderRadius: "3px 3px 0 0", opacity: 0.6 }} />
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{d.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+            {dowTip && (
+              <div style={{ marginTop: 10, padding: "8px 12px", background: C.surface, borderRadius: 8, fontSize: 12.5, lineHeight: 1.7 }}>
+                <strong>{dowTip.label}</strong>
+                {" · "}Incasso: {euro(dowTip.fat)}
+                {dowTip.prevFat !== undefined && <span style={{ color: C.muted }}> (prec. {euro(dowTip.prevFat)})</span>}
+                {" · "}Ordini: {dowTip.ord}
+                {dowTip.avg > 0 && ` · Media: ${euro(dowTip.avg)}`}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Preferenze menù ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+          <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, gridColumn: "2" }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>🍟 Preferenze menù</div>
+            {stats.menuTot === 0
+              ? <div style={{ color: C.muted, fontSize: 13 }}>Nessun ordine con menù nel periodo.</div>
+              : (<>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Patatine fritte</div>
+                    <div style={{ fontSize: 20, fontWeight: 800 }}>
+                      {Math.round((1 - stats.pateDolciCount / stats.menuTot) * 100)}%
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 12, color: C.muted }}>Patate dolci (+1€)</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: "#f59e0b" }}>
+                      {Math.round(stats.pateDolciCount / stats.menuTot * 100)}%
+                    </div>
+                  </div>
+                </div>
+                <div style={{ height: 10, borderRadius: 5, background: C.line, overflow: "hidden", display: "flex" }}>
+                  <div style={{ width: `${(1 - stats.pateDolciCount / stats.menuTot) * 100}%`, background: C.blue }} />
+                  <div style={{ flex: 1, background: "#f59e0b" }} />
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Su {stats.menuTot} menù ordinati</div>
+              </>)
+            }
+          </div>
+        </div>
+
+      </>)}
+    </div>
+  );
+}
+
 function ExportPanel({ from, to, onFromChange, onToChange }: { from: string; to: string; onFromChange: (v: string) => void; onToChange: (v: string) => void }) {
   const [formato, setFormato] = useState<"xlsx" | "csv">("xlsx");
   const [busy, setBusy] = useState(false);
