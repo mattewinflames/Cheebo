@@ -15,7 +15,7 @@ import { createHppOrder } from "./_lib/nexi.js";
 import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, type Hold } from "./_lib/holds.js";
 import { resolveCart, isResolveError, type BookingReq } from "../src/lib/booking.js";
 import { serviceFromKey, upcomingSessions, minWindowNow } from "../src/lib/schedule.js";
-import { totalWindows, planFirst, planAt, ledgerFromMap, ledgerToMap, type Placement } from "../src/lib/dispatch.js";
+import { totalWindows, planFirst, planAt, ledgerFromMap, ledgerToMap, WINDOW_MIN, type Placement } from "../src/lib/dispatch.js";
 import type { MenuItem } from "../src/lib/menu.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const holdRef = adminDb.collection(HOLDS).doc();
 
   type TxOut =
-    | { ok: true; windowIndex: number; readyMin: number }
+    | { ok: true; windowIndex: number; readyMin: number; requestedReadyMin: number | undefined }
     | { ok: false; status: number; error: string; itemId?: string; left?: number };
 
   const specialBase = (id: string): number => byId.get(id)?.special?.stock ?? 0;
@@ -80,9 +80,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       let plan: Placement;
+      // Calcola l'orario richiesto PRIMA del fallback, per poterlo comunicare al client
+      const requestedReadyMin = (mode === "at" && typeof targetWindow === "number")
+        ? service.startMin + (targetWindow + 1) * WINDOW_MIN
+        : undefined;
       if (mode === "at" && typeof targetWindow === "number") {
         plan = planAt(led, resolved.patties, targetWindow, service, minW);
-        if (!plan.ok) plan = planFirst(led, resolved.patties, service, minW);
+        // Fallback: riparte dalla finestra SUCCESSIVA a quella scelta (non da zero)
+        if (!plan.ok) plan = planFirst(led, resolved.patties, service, Math.max(targetWindow + 1, minW));
       } else {
         plan = planFirst(led, resolved.patties, service, minW);
       }
@@ -105,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         createdAt: FieldValue.serverTimestamp(),
       };
       tx.set(holdRef, hold);
-      return { ok: true, windowIndex: plan.windowIndex, readyMin: plan.readyMin };
+      return { ok: true, windowIndex: plan.windowIndex, readyMin: plan.readyMin, requestedReadyMin };
     });
   } catch (e) {
     console.error("[create-booking] transazione", e);
@@ -148,7 +153,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       nexiCorrelationId: correlationId,
     });
 
-    return res.status(200).json({ url: nexiRes.hostedPage, holdId: holdRef.id });
+    return res.status(200).json({
+      url: nexiRes.hostedPage,
+      holdId: holdRef.id,
+      assignedReadyMin: out.readyMin,
+      requestedReadyMin: out.requestedReadyMin,
+    });
   } catch (e) {
     console.error("[create-booking] nexi", e);
     return res.status(502).json({ error: "pagamento non avviabile, riprova" });

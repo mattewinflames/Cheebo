@@ -42,6 +42,7 @@ export default function Prenotazioni() {
   const [choice, setChoice] = useState<Choice>(null);
   const [result, setResult] = useState<{ readyMin: number; tranches: number; proposedDifferent: boolean; code: number } | null>(null);
   const [pay, setPay] = useState<PayMethod | null>(PAY_DEFAULT);
+  const [slotWarning, setSlotWarning] = useState<{ assignedReadyMin: number; requestedReadyMin: number; url: string } | null>(null);
 
   const session = sessions.find((s) => s.serviceKey === sessionKey);
   const service: Service | null = session ? { startMin: session.startMin, endMin: session.endMin, label: session.label } : null;
@@ -148,9 +149,17 @@ export default function Prenotazioni() {
           mode: (choice === "first" || choice === null ? "first" : "at"),
           targetWindow: choice && choice !== "first" ? choice.window : undefined,
           cart: reqCart,
-        });
+        }) as Awaited<ReturnType<typeof startCheckout>> & { assignedReadyMin?: number; requestedReadyMin?: number };
 
-        if (res.ok) { window.location.href = res.url; return; } // via verso Stripe
+        if (res.ok) {
+          // Se il server ha assegnato un orario diverso da quello scelto, avvisa prima del redirect
+          if (res.requestedReadyMin !== undefined && res.assignedReadyMin !== undefined && res.assignedReadyMin !== res.requestedReadyMin) {
+            setSlotWarning({ assignedReadyMin: res.assignedReadyMin, requestedReadyMin: res.requestedReadyMin, url: res.url });
+            return;
+          }
+          window.location.href = res.url;
+          return;
+        }
         if (res.itemId) setErr(res.left ? `Ne restano solo ${res.left}: riduci la quantità e riprova.` : "Lo special è appena andato esaurito.");
         else if (res.error === "piastra al completo") setErr("Per questo servizio la piastra è al completo. Prova un altro giorno.");
         else setErr(res.error || "Non è stato possibile avviare il pagamento. Riprova.");
@@ -444,6 +453,36 @@ export default function Prenotazioni() {
           Built by MattewInFlames Studio
         </a>
       </div>
+
+      {/* Modale avviso orario cambiato (#66) */}
+      {slotWarning && createPortal(
+        <>
+          <div className="cb-scrim" onClick={() => { setSlotWarning(null); setBusy(false); }} />
+          <div className="cb-panel" role="dialog" aria-modal="true" aria-label="Orario cambiato" style={{ maxHeight: "auto" }}>
+            <div style={{ padding: "28px 22px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div className="arch" style={{ fontWeight: 800, fontSize: 20, color: C.ink }}>Orario cambiato</div>
+              <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.55 }}>
+                L'orario delle <strong style={{ color: C.ink }}>{fmt(slotWarning.requestedReadyMin)}</strong> è esaurito mentre completavi il pagamento.
+                {" "}Il primo slot libero è le <strong style={{ color: C.blue }}>{fmt(slotWarning.assignedReadyMin)}</strong>.
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.45 }}>
+                Vuoi procedere con le <strong>{fmt(slotWarning.assignedReadyMin)}</strong>, oppure tornare indietro e scegliere un altro orario?
+              </div>
+              <button
+                onClick={() => { window.location.href = slotWarning.url; }}
+                style={{ width: "100%", background: C.blue, color: "#fff", border: "none", borderRadius: 12, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+                Sì, procedo alle {fmt(slotWarning.assignedReadyMin)}
+              </button>
+              <button
+                onClick={() => { setSlotWarning(null); setBusy(false); setStep("quando"); }}
+                style={{ width: "100%", background: "none", color: C.muted, border: `1px solid ${C.line}`, borderRadius: 12, padding: "13px", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                No, scelgo un altro orario
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 }

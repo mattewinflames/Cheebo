@@ -45,6 +45,57 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 
 ---
 
+## 2026-09-05
+
+### #66 — BUG CRITICO: fallback silenzioso planAt → planFirst causa overflow piastra
+**Tipo:** bug identificato · **Stato:** ⚠️ non ancora fixato
+**File:** `api/create-booking.ts`
+**Verifica:** non verificato — bug identificato dall'analisi del codice e dall'osservazione della piastra admin (20:10–20:20 a 23 patty su CAP 13)
+
+Riga incriminata:
+```typescript
+if (!plan.ok) plan = planFirst(led, resolved.patties, service, minW);
+```
+Quando il cliente sceglie un orario specifico (`mode === "at"`) e `planAt` fallisce perché la finestra è piena, il codice fa un fallback silenzioso a `planFirst` — che riparte **da zero** invece che dalla finestra successiva. Il cliente non viene avvisato, l'ordine finisce in una finestra diversa da quella scelta, e nell'admin tutti gli ordini appaiono impilati nella stessa finestra.
+
+**Perché:** il fallback era pensato come safety net ma non comunica l'orario reale assegnato al cliente né scala correttamente.
+**Nota:** Fix concordata (Opzione B): mantenere il fallback ma passare `targetWindow + 1` come `minW` a `planFirst`, restituire `assignedReadyMin` nel response, mostrare avviso al cliente in `Prenotazioni.tsx` se l'orario è cambiato. Da implementare nella prossima sessione.
+
+---
+
+### #65 — Dashboard statistiche (analytics.ts)
+**Tipo:** feature · **Stato:** ✅ fatto
+**File:** `src/lib/analytics.ts` (nuovo), `src/pages/AdminCassa.tsx`
+**Verifica:** tsc ✓ · testato manualmente in locale
+
+Nuova scheda "Stats" nell'admin con:
+- Preset periodo: Oggi / 7g / 30g / 90g / Personalizzato
+- 4 KPI con confronto periodo precedente (↑/↓ %): Ordini, Incasso, Ordine medio, % con menù
+- Andamento incassi giornaliero con tooltip interattivo
+- Panini top 8 con barre proporzionali
+- Orario di ritiro con ora di punta e fascia più intensa
+- Box tabbato Extra / Salse / Bibite
+- Grafico per giorno della settimana con barre doppie (periodo corrente vs precedente) + delta %
+- Preferenze menù (fritte vs patate dolci) con barra bicolore
+- Parser strutturato degli `items` basato sul formato esatto di `cartLabel()` in `analytics.ts`
+- 2 query Firestore per render (periodo corrente + precedente), `useMemo` su `computeAnalytics`
+
+**Perché:** il cliente voleva visibilità sulle performance del locale senza esportare CSV ogni volta.
+**Nota:** clienti abituali non implementabile — `name` è stringa libera, nessun ID univoco cliente.
+
+---
+
+### #64 — Incassi: range date condiviso tra lista ordini e ExportPanel
+**Tipo:** feature · **Stato:** ✅ fatto
+**File:** `src/pages/AdminCassa.tsx`
+**Verifica:** tsc ✓ · testato manualmente in locale
+
+La sezione Incassi ora è controllata da un selettore DAL/AL condiviso tra lista ordini e ExportPanel. Default: oggi. Aggiunta colonna "Servizio" nella lista quando il range copre più giorni. Bottone "Torna a oggi" per reset rapido. Rimosso il SessionPicker dalla sezione Incassi. I campi DAL/AL dell'ExportPanel sono stati trasformati in props (`from`, `to`, `onFromChange`, `onToChange`) per condividere lo stato.
+
+**Perché:** era impossibile vedere gli incassi di giorni passati senza esportare un file.
+
+---
+
 ## 2026-08-10
 
 ### #49 — Fix badge "ORA" fantasma + fasce piastra espandibili
