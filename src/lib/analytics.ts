@@ -366,7 +366,7 @@ export function computeAnalytics(
     prevScontrinoMedio: prev.ordini > 0 ? Math.round(prev.scontrinoMedio * 100) / 100 : undefined,
     prevQuotaMenu:      prev.ordini > 0 ? pctMenu(prev) : undefined,
 
-    topPanini: ranked(cur.panini, cur.ordini),
+    topPanini: ranked(cur.panini, cur.ordini, 8),
     topExtras: ranked(cur.extras, cur.ordini),
     topSalse:  ranked(cur.salse,  cur.ordini),
     topBibite: ranked(cur.bibite, cur.ordini),
