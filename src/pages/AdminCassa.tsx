@@ -868,7 +868,9 @@ function OrdiniSection() {
   const curWi = isToday && nowMin >= service.startMin && nowMin < service.endMin ? Math.floor((nowMin - service.startMin) / 10) : -1;
   const totalPatty = orders.reduce((s, o) => s + o.patties, 0);
   const counts = orders.reduce<Record<string, number>>((m, o) => ((m[o.status] = (m[o.status] || 0) + 1), m), {});
-  const visible = orders.filter((o) => filter === "tutti" || (filter === "dafare" ? (o.status === "nuovo" || o.status === "in_consegna") : o.status === filter));
+  const visible = orders
+    .filter((o) => filter === "tutti" || (filter === "dafare" ? (o.status === "nuovo" || o.status === "in_consegna") : o.status === filter))
+    .sort((a, b) => a.readyMin - b.readyMin);
 
   return (
     <>
