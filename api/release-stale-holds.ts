@@ -12,7 +12,7 @@
    Protetto da CRON_SECRET per evitare chiamate non autorizzate.
    ========================================================================== */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { adminDb, FieldValue } from "./_lib/admin.js";
+import { adminDb, FieldValue, Timestamp } from "./_lib/admin.js";
 import { HOLDS, SESSIONS } from "./_lib/holds.js";
 import { serviceFromKey } from "../src/lib/schedule.js";
 import { totalWindows, ledgerFromMap, ledgerToMap } from "../src/lib/dispatch.js";
@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const cutoff = new Date(Date.now() - STALE_MINUTES * 60 * 1000);
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - STALE_MINUTES * 60 * 1000));
 
   let released = 0;
   let errors = 0;
@@ -60,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   console.log(`[release-stale-holds] completato: ${released} rilasciati, ${errors} errori`);
-  return res.status(200).json({ released, errors, cutoff: cutoff.toISOString() });
+  return res.status(200).json({ released, errors, cutoff: cutoff.toDate().toISOString() });
 }
 
 /** Rilascia un hold abbandonato: libera la piastra e lo marca come scaduto.
