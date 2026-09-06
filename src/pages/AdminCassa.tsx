@@ -16,7 +16,7 @@ import { logBLE } from "../lib/bleLogger";
 const C = {
   bg: "#FFFFFF", surface: "#F5F5FB", line: "#E8E8F2",
   blue: "#2E2C8B", ghost: "#E3E2F4", ink: "#1B1B47", muted: "#8786A4",
-  amber: "#E0820F", green: "#1E9E57", redline: "#C8441A", veg: "#1E9E57", danger: "#C8441A",
+  amber: "#E0820F", amberBg: "#FEF3E2", green: "#1E9E57", redline: "#C8441A", veg: "#1E9E57", danger: "#C8441A",
 };
 const STATUS: Record<OrderStatus, { label: string; color: string; next: OrderStatus | null; action: string | null }> = {
   nuovo: { label: "Nuovo", color: C.blue, next: "in_consegna", action: "Segna in consegna" },
@@ -895,13 +895,23 @@ function OrdiniSection() {
             </div>
             {Array.from({ length: shown }).map((_, wi) => {
               const used = fill[wi] || 0, wStart = windowStartMin(service, wi), here = orders.filter((c) => c.windowIndex === wi && c.patties > 0), isNow = wi === curWi, empty = used === 0;
+              const isOverflow = used > CAP;
+              const overflowDelta = isOverflow ? used - CAP : 0;
               return (
                 <div key={wi} style={{ padding: "9px 0", borderBottom: wi < shown - 1 ? `1px solid ${C.line}` : "none" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                     <span style={{ fontSize: 12.5, fontWeight: isNow ? 700 : 500, color: isNow ? C.blue : C.ink, display: "flex", alignItems: "center", gap: 5 }}><Clock size={11} color={isNow ? C.blue : C.muted} />{fmt(wStart)}–{fmt(windowEndMin(service, wi))}{isNow && <span style={{ fontSize: 10, color: C.blue, marginLeft: 4 }}>ORA</span>}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: used ? 700 : 400, color: used === CAP ? C.redline : empty ? "#b9b9cc" : C.muted }}>{empty ? "libera" : `${used}/${CAP}${used === CAP ? " · piena" : ""}`}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {isOverflow && (
+                        <Flame size={13} color={C.amber} />
+                      )}
+                      <span style={{ fontSize: 11.5, fontWeight: used ? 700 : 400, color: used >= CAP ? (isOverflow ? C.amber : C.redline) : empty ? "#b9b9cc" : C.muted }}>{empty ? "libera" : isOverflow ? `${CAP}+${overflowDelta}` : `${used}/${CAP}${used === CAP ? " · piena" : ""}`}</span>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 3, marginBottom: here.length ? 6 : 0 }}>{Array.from({ length: CAP }).map((_, s) => <div key={s} style={{ flex: 1, height: 9, borderRadius: 2, background: s < used ? C.blue : "#DEDEEC" }} />)}</div>
+                  <div style={{ display: "flex", gap: 3, marginBottom: here.length ? 6 : 0 }}>
+                    {Array.from({ length: CAP }).map((_, s) => <div key={s} style={{ flex: 1, height: 9, borderRadius: 2, background: s < Math.min(used, CAP) ? (isOverflow ? C.amber : C.blue) : "#DEDEEC" }} />)}
+                    {isOverflow && Array.from({ length: overflowDelta }).map((_, s) => <div key={`ov-${s}`} style={{ flex: 1, height: 9, borderRadius: 2, background: C.amberBg, border: `1.5px solid ${C.amber}` }} />)}
+                  </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>{here.map((c) => <span key={c.id} style={{ fontSize: 11, background: C.bg, border: `1px solid ${C.line}`, borderRadius: 20, padding: "2px 9px" }}>{c.name} · {c.patties}p{c.mode === "at" ? " · scelto" : ""}</span>)}</div>
                 </div>
               );

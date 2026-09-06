@@ -12,7 +12,28 @@
    ========================================================================== */
 
 export const CAP = 13;
+export const CAP_OVERFLOW = 18;        // hard limit assoluto con overflow
+export const OVERFLOW_THRESHOLD = 9;   // sopra questa soglia: max +5 per ordine
 export const WINDOW_MIN = 10;
+
+/**
+ * Restituisce quanti patty possono ancora entrare in una finestra,
+ * tenendo conto delle regole di overflow:
+ * - se usati < CAP: spazio normale fino a CAP
+ * - se usati >= CAP: piena, nessuno spazio
+ * - se usati > OVERFLOW_THRESHOLD e < CAP: overflow consentito fino a min(CAP_OVERFLOW, usati+5)
+ * - se usati <= OVERFLOW_THRESHOLD: overflow libero fino a CAP_OVERFLOW
+ */
+export function windowCapacity(used: number, orderSize: number): number {
+  if (used >= CAP) return 0;                          // piena — nessun overflow
+  if (used > OVERFLOW_THRESHOLD) {
+    // zona parzialmente occupata: overflow solo se ordine ≤ 5 patty e non supera CAP_OVERFLOW
+    const canAdd = Math.min(5, CAP_OVERFLOW - used);
+    return orderSize <= 5 ? canAdd : 0;
+  }
+  // slot libero: overflow fino a CAP_OVERFLOW
+  return CAP_OVERFLOW - used;
+}
 
 export interface Service {
   label?: string;
@@ -43,22 +64,22 @@ export const ledgerToMap = (led: Ledger): Record<string, number> => {
 export const windowStartMin = (s: Service, w: number): number => s.startMin + w * WINDOW_MIN;
 export const windowEndMin = (s: Service, w: number): number => windowStartMin(s, w) + WINDOW_MIN;
 
-/** Posizioni libere cumulate nelle finestre [from, to] inclusi. */
-export function freeInRange(ledger: Ledger, from: number, to: number): number {
+/** Posizioni libere cumulate nelle finestre [from, to] inclusi, per un ordine di `orderSize` patty. */
+export function freeInRange(ledger: Ledger, from: number, to: number, orderSize = 0): number {
   let f = 0;
-  for (let w = Math.max(0, from); w <= to && w < ledger.length; w++) f += CAP - ledger[w];
+  for (let w = Math.max(0, from); w <= to && w < ledger.length; w++) f += windowCapacity(ledger[w], orderSize);
   return f;
 }
 
 /** Posizioni libere cumulate dalla finestra 0 fino a T inclusa. */
-export function freeUpTo(ledger: Ledger, T: number): number {
-  return freeInRange(ledger, 0, T);
+export function freeUpTo(ledger: Ledger, T: number, orderSize = 0): number {
+  return freeInRange(ledger, 0, T, orderSize);
 }
 
 /** Prima finestra (>= minWindow) in cui un ordine da `patties` può essere pronto. */
 export function firstFeasibleWindow(ledger: Ledger, patties: number, minWindow = 0): number {
   const n = ledger.length;
-  for (let T = Math.max(0, minWindow); T < n; T++) if (freeInRange(ledger, minWindow, T) >= patties) return T;
+  for (let T = Math.max(0, minWindow); T < n; T++) if (freeInRange(ledger, minWindow, T, patties) >= patties) return T;
   return -1;
 }
 
@@ -81,7 +102,7 @@ export function planFirst(ledger: Ledger, patties: number, s: Service, minWindow
   }
   const cells: number[] = [];
   for (let w = start; w < n && cells.length < patties; w++) {
-    let free = CAP - ledger[w];
+    let free = windowCapacity(ledger[w], patties);
     while (free-- > 0 && cells.length < patties) cells.push(w);
   }
   if (cells.length < patties) return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
@@ -96,10 +117,10 @@ export function planAt(ledger: Ledger, patties: number, target: number, s: Servi
   const start = Math.max(0, minWindow);
   if (target < start || target >= n) return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
   if (patties <= 0) return { ok: true, windowIndex: target, readyMin: windowEndMin(s, target), cells: [], tranches: 1 };
-  if (freeInRange(ledger, start, target) < patties) return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
+  if (freeInRange(ledger, start, target, patties) < patties) return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
   const cells: number[] = [];
   for (let w = target; w >= start && cells.length < patties; w--) {
-    let free = CAP - ledger[w];
+    let free = windowCapacity(ledger[w], patties);
     while (free-- > 0 && cells.length < patties) cells.push(w);
   }
   return { ok: true, windowIndex: target, readyMin: windowEndMin(s, target), cells, tranches: tranchesOf(cells) };
