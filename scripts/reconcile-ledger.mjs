@@ -90,10 +90,13 @@ console.log(`⚠️   Delta: ${delta > 0 ? "+" : ""}${delta} patty (${delta > 0 
 
 // 4. Chiedi conferma
 console.log(`\n🔄  Sovrascrittura ledger con i valori ricalcolati...`);
-await sessRef.set(
-  { ledger: ledgerMap, updatedAt: FieldValue.serverTimestamp() },
-  { merge: true }
-);
+// 4. Leggi il documento completo e riscrivi con il ledger corretto
+const currentData = sessSnap.data() ?? {};
+await sessRef.set({
+  ...currentData,
+  ledger: ledgerMap,
+  updatedAt: FieldValue.serverTimestamp(),
+});
 
 console.log("✅  Ledger aggiornato correttamente.\n");
 process.exit(0);
