@@ -163,7 +163,8 @@ service cloud.firestore {
        server (Admin SDK). Nessun accesso client — esplicito, oltre al
        default-deny, per non lasciare dubbi. */
     match /holds/{id} {
-      allow read, write: if false;
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     /* ------------------------------------------------------------ SETTINGS
