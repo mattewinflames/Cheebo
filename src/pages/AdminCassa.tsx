@@ -1174,10 +1174,10 @@ function KpiCard({ label, value, sub, trend }: { label: string; value: string; s
   );
 }
 
-function MiniBar({ value, max, color = C.blue }: { value: number; max: number; color?: string }) {
+function MiniBar({ value, max, color = C.blue, height = 6 }: { value: number; max: number; color?: string; height?: number }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
-    <div style={{ flex: 1, height: 7, background: C.line, borderRadius: 4, overflow: "hidden" }}>
+    <div style={{ flex: 1, height, background: C.line, borderRadius: 4, overflow: "hidden" }}>
       <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4 }} />
     </div>
   );
@@ -1203,7 +1203,7 @@ function RankedList({ title, items, color }: { title: string; items: { name: str
 
 function StatisticheSection() {
   const oggi = localISODate(new Date());
-  const [preset, setPreset] = useState<"oggi" | "7g" | "30g" | "90g" | "custom">("30g");
+  const [preset, setPreset] = useState<"oggi" | "7g" | "30g" | "90g" | "custom">("7g");
   const [customFrom, setCustomFrom] = useState(addDays(oggi, -29));
   const [customTo,   setCustomTo]   = useState(oggi);
 
@@ -1326,28 +1326,34 @@ function StatisticheSection() {
         </div>
 
         {/* ── Panini + Orari ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div style={{ marginBottom: 14 }}>
           <RankedList title="🍔 Panini più venduti" items={stats.topPanini} color={C.blue} />
+        </div>
 
-          <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>⏰ Orario di ritiro</div>
-            {stats.oraPunta && (
-              <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>
-                🔥 Ora di punta: <strong>{stats.oraPunta}</strong>
-                {stats.fasciaPunta && <> · Fascia intensa: <strong>{stats.fasciaPunta}</strong></>}
+        <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: C.ink }}>Orario di ritiro</div>
+                {stats.fasciaPunta && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Fascia intensa: <strong>{stats.fasciaPunta}</strong></div>}
               </div>
-            )}
-            <div style={{ maxHeight: 170, overflowY: "auto" }}>
+              {stats.oraPunta && (
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>ora di punta</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: C.blue, lineHeight: 1 }}>{stats.oraPunta}</div>
+                </div>
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
               {stats.slotRitiro.map(s => (
-                <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                  <span style={{ fontSize: 12, color: C.muted, width: 36 }}>{s.label}</span>
-                  <MiniBar value={s.count} max={maxSlot} color="#f59e0b" />
-                  <span style={{ fontSize: 12, fontWeight: 700, width: 22, textAlign: "right" }}>{s.count}</span>
+                <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13, color: s.label === stats.oraPunta ? C.blue : C.muted, fontWeight: s.label === stats.oraPunta ? 700 : 400, width: 40, flexShrink: 0 }}>{s.label}</span>
+                  <MiniBar value={s.count} max={maxSlot} color={s.label === stats.oraPunta ? C.blue : "#f59e0b"} height={10} />
+                  <span style={{ fontSize: 13, fontWeight: 700, width: 22, textAlign: "right" }}>{s.count}</span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+
 
         {/* ── Extra / Salse / Bibite (box unico tabbato) + Giorno settimana ── */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
