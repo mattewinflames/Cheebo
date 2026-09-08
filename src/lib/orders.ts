@@ -169,6 +169,34 @@ export function subscribeLedger(
   );
 }
 
+/** Holds in attesa di una sessione in tempo reale.
+ *  Ritorna un array di patty pendenti per finestra (come il ledger ma solo per holds in attesa). */
+export function subscribeHoldsPending(
+  serviceKey: string,
+  n: number,
+  cb: (pendingFill: number[]) => void,
+): () => void {
+  const q = query(collection(db, "holds"),
+    where("serviceKey", "==", serviceKey),
+    where("status", "==", "attesa"),
+  );
+  return onSnapshot(q, (snap) => {
+    const fill = new Array(n).fill(0);
+    for (const d of snap.docs) {
+      const hold = d.data();
+      const cells: number[] = Array.isArray(hold.cells) ? hold.cells : [];
+      for (const w of cells) { if (w >= 0 && w < n) fill[w] += 1; }
+      // Fallback per holds senza cells: usa windowIndex
+      if (cells.length === 0 && typeof hold.windowIndex === "number" && hold.patties > 0) {
+        const wi = hold.windowIndex;
+        if (wi >= 0 && wi < n) fill[wi] += hold.patties;
+      }
+    }
+    cb(fill);
+  });
+}
+
+
 /** Ordini di una sessione in tempo reale (per l'admin).
  *  Query a CAMPO SINGOLO (serviceKey) + ordinamento lato client: così non serve
  *  alcun indice composito (fonte tipica di "la lista resta vuota" in produzione)
