@@ -3,7 +3,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } fr
 import { auth } from "../lib/firebase";
 import { upcomingSessions, resolveService, dateKey, type UpcomingSession } from "../lib/schedule";
 import { CAP, totalWindows, windowStartMin, windowEndMin, planFirst, fmt, type Service } from "../lib/dispatch";
-import { subscribeOrders, subscribeLedger, subscribeHoldsPending, setStatus, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
+import { subscribeOrders, subscribeLedger, subscribeHoldsConfirmed, setStatus, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
 import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore";
 import { fetchOrdersRange, buildRows, summarize, downloadCSV, downloadXLSX } from "../lib/export";
 import { computeAnalytics, prevPeriod, addDays, localISODate, type Analytics } from "../lib/analytics";
@@ -801,7 +801,7 @@ function OrdiniSection() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [ledger, setLedger] = useState<number[]>([]);
-  const [pendingFill, setPendingFill] = useState<number[]>([]); // patty in attesa per finestra
+  const [confirmedFill, setConfirmedFill] = useState<number[]>([]); // patty in attesa per finestra
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [filter, setFilter] = useState<"dafare" | "consegnato" | "tutti">("dafare");
   const [printOrder, setPrintOrder] = useState<Order | null>(null);
@@ -817,7 +817,7 @@ function OrdiniSection() {
   useEffect(() => {
     if (!sessionKey || !service) return;
     const n = totalWindows(service);
-    return subscribeHoldsPending(sessionKey, n, setPendingFill);
+    return subscribeHoldsConfirmed(sessionKey, n, setConfirmedFill);
   }, [sessionKey, service?.startMin]);
   useEffect(() => { const after = () => setPrintOrder(null); window.addEventListener("afterprint", after); return () => window.removeEventListener("afterprint", after); }, []);
   const [printing, setPrinting] = useState<string | null>(null); // orderId in corso
@@ -900,7 +900,7 @@ function OrdiniSection() {
               <span style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 5 }}><Flame size={13} color={C.redline} />{CAP}/10 min</span>
             </div>
             {Array.from({ length: shown }).map((_, wi) => {
-              const used = fill[wi] || 0, pending = pendingFill[wi] || 0, confirmed = Math.max(0, used - pending), wStart = windowStartMin(service, wi), here = orders.filter((c) => c.windowIndex === wi && c.patties > 0), isNow = wi === curWi, empty = used === 0;
+              const used = fill[wi] || 0, confirmed = confirmedFill[wi] || 0, pending = Math.max(0, used - confirmed), wStart = windowStartMin(service, wi), here = orders.filter((c) => c.windowIndex === wi && c.patties > 0), isNow = wi === curWi, empty = used === 0;
               const isOverflow = used > CAP;
               const overflowDelta = isOverflow ? used - CAP : 0;
               return (
