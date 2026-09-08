@@ -821,23 +821,23 @@ function OrdiniSection() {
   }, [sessionKey, service?.startMin]);
   useEffect(() => { const after = () => setPrintOrder(null); window.addEventListener("afterprint", after); return () => window.removeEventListener("afterprint", after); }, []);
   const [printing, setPrinting] = useState<string | null>(null); // orderId in corso
+  const [printStatus, setPrintStatus] = useState<string>(""); // stato verboso stampa
   const printingRef = useRef<string | null>(null); // lock sincrono anti-doppio-click
   const doPrint = async (o: Order) => {
     if (!o.id) return;
-    // Lock sincrono: blocca immediatamente senza aspettare il re-render React
     if (printingRef.current) return;
     printingRef.current = o.id;
     setPrinting(o.id);
+    setPrintStatus("Generando comanda…");
     try {
       const r = await fetch(`/api/comanda-txt?order_id=${encodeURIComponent(o.id)}`);
-      if (!r.ok) { alert("Errore generazione comanda"); return; }
+      if (!r.ok) { setPrintStatus("Errore generazione"); alert("Errore generazione comanda"); return; }
       const text = await r.text();
 
       if (bluetoothSupported()) {
-        // Stampa diretta BLE (Chrome Android)
-        await printESCPOS(text);
+        await printESCPOS(text, setPrintStatus);
       } else {
-        // Fallback: download manuale (Safari iOS, Firefox, ecc.)
+        setPrintStatus("Download…");
         const blob = new Blob([text], { type: "text/plain" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -845,20 +845,20 @@ function OrdiniSection() {
         a.download = `comanda-${o.code ?? o.id.slice(0, 6)}.txt`;
         a.click();
         URL.revokeObjectURL(url);
+        setPrintStatus("✓ Scaricato");
       }
     } catch (err) {
-      // L'utente ha annullato il dialog Bluetooth: non è un errore
-      if (err instanceof DOMException && err.name === "NotFoundError") return;
-      // Log su Firestore per troubleshooting remoto
+      if (err instanceof DOMException && err.name === "NotFoundError") { setPrintStatus("Annullato"); return; }
       await logBLE("error", "Errore in doPrint (AdminCassa)", {
         detail: err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err),
       });
-      // Timeout o connessione BLE persa: messaggio specifico
       const msg = err instanceof Error ? err.message : "Errore sconosciuto";
-      alert(`Errore stampa: ${msg}\n\nRiprova — se il problema persiste, riavvia il Bluetooth.`);
+      setPrintStatus(`⚠ ${msg.split("\n")[0]}`);
     } finally {
       printingRef.current = null;
       setPrinting(null);
+      // Resetta il messaggio di stato dopo 3 secondi
+      setTimeout(() => setPrintStatus(""), 3000);
     }
   };
   const [clearing, setClearing] = useState(false);
@@ -966,7 +966,15 @@ function OrdiniSection() {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button onClick={() => doPrint(o)} disabled={printing === o.id} style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6, opacity: printing === o.id ? 0.6 : 1 }}><Printer size={15} /> {printing === o.id ? "Generando…" : "Stampa comanda"}</button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <button onClick={() => doPrint(o)} disabled={!!printing} style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6, opacity: printing ? 0.6 : 1 }}>
+                        <Printer size={15} />
+                        {printing === o.id ? (printStatus || "Stampa in corso…") : "Stampa comanda"}
+                      </button>
+                      {printing === o.id && printStatus && (
+                        <span style={{ fontSize: 11, color: printStatus.startsWith("⚠") ? C.redline : printStatus.startsWith("✓") ? C.green : C.muted, paddingLeft: 4 }}>{printStatus}</span>
+                      )}
+                    </div>
                     {st.next && <button onClick={() => setStatus(o.id, st.next!)} style={{ ...btn("primary"), flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{o.status === "in_consegna" ? <Check size={15} /> : <ChevronRight size={15} />} {st.action}</button>}
                   </div>
                 </div>
