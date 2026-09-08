@@ -176,24 +176,37 @@ export function subscribeHoldsPending(
   n: number,
   cb: (pendingFill: number[]) => void,
 ): () => void {
-  const q = query(collection(db, "holds"),
-    where("serviceKey", "==", serviceKey),
-    where("status", "==", "attesa"),
-  );
-  return onSnapshot(q, (snap) => {
-    const fill = new Array(n).fill(0);
-    for (const d of snap.docs) {
+  const fillAttesa  = new Array<number>(n).fill(0);
+  const fillScaduto = new Array<number>(n).fill(0);
+
+  const merge = () => cb(fillAttesa.map((v, i) => v + fillScaduto[i]));
+
+  const buildFill = (docs: { data(): Record<string, unknown> }[], target: number[]) => {
+    target.fill(0);
+    for (const d of docs) {
       const hold = d.data();
-      const cells: number[] = Array.isArray(hold.cells) ? hold.cells : [];
-      for (const w of cells) { if (w >= 0 && w < n) fill[w] += 1; }
-      // Fallback per holds senza cells: usa windowIndex
-      if (cells.length === 0 && typeof hold.windowIndex === "number" && hold.patties > 0) {
-        const wi = hold.windowIndex;
-        if (wi >= 0 && wi < n) fill[wi] += hold.patties;
+      const cells: number[] = Array.isArray(hold["cells"]) ? (hold["cells"] as number[]) : [];
+      for (const w of cells) { if (w >= 0 && w < n) target[w] += 1; }
+      if (cells.length === 0 && typeof hold["windowIndex"] === "number" && typeof hold["patties"] === "number" && hold["patties"] > 0) {
+        const wi = hold["windowIndex"] as number;
+        if (wi >= 0 && wi < n) target[wi] += hold["patties"] as number;
       }
     }
-    cb(fill);
-  });
+    merge();
+  };
+
+  // "attesa": pagamento non completato
+  const u1 = onSnapshot(
+    query(collection(db, "holds"), where("serviceKey", "==", serviceKey), where("status", "==", "attesa")),
+    (snap) => buildFill(snap.docs, fillAttesa),
+  );
+  // "scaduto" senza releasedAt: cron non ancora passato, celle ancora nel ledger
+  const u2 = onSnapshot(
+    query(collection(db, "holds"), where("serviceKey", "==", serviceKey), where("status", "==", "scaduto")),
+    (snap) => buildFill(snap.docs.filter(d => !d.data()["releasedAt"]), fillScaduto),
+  );
+
+  return () => { u1(); u2(); };
 }
 
 
