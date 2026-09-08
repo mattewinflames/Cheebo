@@ -95,7 +95,7 @@ function wrap(text: string, maxLen: number, indent = ""): string[] {
  * - extras    → parti dopo "·" che NON iniziano con "senza" → riga "* TESTO"
  * - rimozioni → parti dopo "senza"                         → riga "# NO TESTO"
  */
-function parseItem(raw: string): { qty: number; nome: string; extras: string[]; rimozioni: string[] } {
+function parseItem(raw: string): { qty: number; nome: string; menu: string | null; extras: string[]; rimozioni: string[] } {
   // Estrai quantità PRIMA di toASCII (il simbolo × è U+00D7, toASCII lo converte in "x")
   const qtyMatch = raw.match(/^(\d+)[×x]\s*/i);
   const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
@@ -104,22 +104,27 @@ function parseItem(raw: string): { qty: number; nome: string; extras: string[]; 
   // Split per " · " (separatore di resolveCart) → toASCII lo converte in " - "
   const parti = rest.split(/\s+-\s+/).map(p => p.trim()).filter(Boolean);
   const nome = parti[0] ?? rest.trim();
+  let menu: string | null = null;
   const extras: string[] = [];
   const rimozioni: string[] = [];
 
   for (let i = 1; i < parti.length; i++) {
     const p = parti[i];
     const senzaMatch = p.match(/^senza\s+(.+)/i);
+    const menuMatch = p.match(/^menu\s+con\s+(.+)/i);
     if (senzaMatch) {
       // "senza cipolla, pickles" → ["NO CIPOLLA", "NO PICKLES"]
       const voci = senzaMatch[1].split(/,\s*/);
       for (const v of voci) rimozioni.push("NO " + v.trim().toUpperCase());
+    } else if (menuMatch) {
+      // "menu con coca-cola zero" → drink separato, nome panino riceve " MENU"
+      menu = menuMatch[1].trim().toUpperCase();
     } else {
       extras.push(p.toUpperCase());
     }
   }
 
-  return { qty, nome, extras, rimozioni };
+  return { qty, nome, menu, extras, rimozioni };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -187,21 +192,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (items.length === 0) continue;
     hasContent = true;
     righe.push(cat);                  // intestazione categoria (es. "SMASHBURGER")
-    for (const { qty, nome, extras, rimozioni } of items) {
+    for (const { qty, nome, menu, extras, rimozioni } of items) {
       const qtyStr = String(qty);
-      const nomeUp = nome.toUpperCase();
-      // Prima riga: "1  CLASSIC SINGOLO" (qty + 2 spazi + nome)
+      const nomeUp = (menu ? "MENU " : "") + nome.toUpperCase();
+      // Prima riga: "1  CRISPY SINGOLO MENU"
       const prefixLen = qtyStr.length + 2;
       const nomeLines = wrap(nomeUp, W - prefixLen);
       righe.push(qtyStr + "  " + (nomeLines[0] ?? ""));
       for (let i = 1; i < nomeLines.length; i++) righe.push(" ".repeat(prefixLen) + nomeLines[i]);
+      // Drink del menu: "   COCA-COLA ZERO" (senza asterisco)
+      if (menu) {
+        for (const r of wrap(menu, W - 3, "   ")) righe.push(r);
+      }
       // Extra: "   * TESTO"
       for (const ex of extras) {
         for (const r of wrap(ex, W - 4, "   * ")) righe.push(r);
       }
       // Rimozioni: "   # NO CIPOLLA"
       if (rimozioni.length > 0) {
-        // Raggruppa tutte le rimozioni su una riga se ci stanno, altrimenti separa
         const tutte = rimozioni.join(" ");
         for (const r of wrap(tutte, W - 4, "   # ")) righe.push(r);
       }
