@@ -161,7 +161,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })();
 
   // Raggruppa items per categoria
-  const gruppi = new Map<Categoria, { qty: number; nome: string; extras: string[]; rimozioni: string[] }[]>();
+  const gruppi = new Map<Categoria, { qty: number; nome: string; menu: string | null; extras: string[]; rimozioni: string[] }[]>();
   for (const cat of CATEGORIA_ORDER) gruppi.set(cat, []);
 
   for (const raw of o.items) {
