@@ -61,7 +61,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
               <div style={{ display: "flex", alignItems: "center", gap: 11 }}><img src="/cheebo-logo.png" alt="Cheebo" width={38} height={38} /><div className="arch" style={{ fontWeight: 900, fontSize: 26, color: C.blue }}>CHEEBO <span style={{ color: C.muted, fontWeight: 700 }}>Admin</span></div></div>
               <button onClick={onLogout} style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6 }}><LogOut size={14} /> Esci</button>
             </div>
-            <div style={{ display: "flex", gap: 4, marginTop: 12 }}>
+            <div style={{ display: "flex", gap: 4, marginTop: 12, overflowX: "auto", scrollbarWidth: "none" }}>
               {settings.cassaEnabled && <NavTab icon={<Store size={16} />} label="Cassa" on={tab === "cassa"} onClick={() => setTab("cassa")} />}
               <NavTab icon={<ClipboardList size={16} />} label="Ordini" on={tab === "ordini"} onClick={() => setTab("ordini")} />
               <NavTab icon={<Wallet size={16} />} label="Incassi" on={tab === "incassi"} onClick={() => setTab("incassi")} />
@@ -1351,7 +1351,7 @@ function StatisticheSection() {
                 </div>
               )}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {stats.slotRitiro.map(s => (
                 <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ fontSize: 13, color: s.label === stats.oraPunta ? C.blue : C.muted, fontWeight: s.label === stats.oraPunta ? 700 : 400, width: 40, flexShrink: 0 }}>{s.label}</span>
@@ -1791,7 +1791,7 @@ function Login() {
 
 /* ---------------- shared ---------------- */
 function Center({ children }: { children: React.ReactNode }) { return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontFamily: "Inter, sans-serif" }}>{children}</div>; }
-function NavTab({ label, icon, on, onClick }: { label: string; icon: React.ReactNode; on: boolean; onClick: () => void }) { return <button onClick={onClick} style={{ background: "none", border: "none", borderBottom: `3px solid ${on ? C.blue : "transparent"}`, color: on ? C.blue : C.muted, padding: "9px 14px", fontSize: 14.5, fontWeight: 700, cursor: "pointer", marginBottom: -1, display: "flex", alignItems: "center", gap: 7 }}>{icon}{label}</button>; }
+function NavTab({ label, icon, on, onClick }: { label: string; icon: React.ReactNode; on: boolean; onClick: () => void }) { return <button onClick={onClick} style={{ background: "none", border: "none", borderBottom: `3px solid ${on ? C.blue : "transparent"}`, color: on ? C.blue : C.muted, padding: "9px 10px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: -1, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", flexShrink: 0 }}>{icon}{label}</button>; }
 function Stat({ n, label }: { n: React.ReactNode; label: string }) { return <div style={{ textAlign: "right" }}><div className="arch" style={{ fontWeight: 800, fontSize: 24, color: C.blue, lineHeight: 1 }}>{n}</div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginTop: 2 }}>{label}</div></div>; }
 /* Badge del pagamento, condiviso da Ordini e Incassi così le due schede non
    divergono. L'icona segue il metodo: banconota = contanti, carta = carta,
