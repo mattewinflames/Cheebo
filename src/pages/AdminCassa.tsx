@@ -1416,7 +1416,7 @@ function StatisticheSection() {
             {stats.byDow.some(d => d.prevFat !== undefined) && (
               <div style={{ display: "flex", gap: 12, marginBottom: 10, fontSize: 11 }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: C.blue, display: "inline-block" }} />Periodo</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: C.line, display: "inline-block" }} />Precedente</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: "#A8B4E8", display: "inline-block" }} />Precedente</span>
               </div>
             )}
             <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 90 }}>
@@ -1441,7 +1441,7 @@ function StatisticheSection() {
                         opacity: dowTip?.label === d.label ? 0.75 : 1 }} />
                       {hPrev !== null && (
                         <div style={{ flex: 1, height: `${hPrev}%`, minHeight: (d.prevFat ?? 0) > 0 ? 3 : 0,
-                          background: C.line, borderRadius: "3px 3px 0 0", opacity: 0.6 }} />
+                          background: "#A8B4E8", borderRadius: "3px 3px 0 0", opacity: 0.7 }} />
                       )}
                     </div>
                     <div style={{ fontSize: 11, color: C.muted }}>{d.label}</div>
