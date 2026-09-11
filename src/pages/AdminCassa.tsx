@@ -1429,13 +1429,10 @@ function StatisticheSection() {
                   : null;
                 return (
                   <div key={d.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer" }}
-                    onMouseEnter={() => setDowTip(d)} onMouseLeave={() => setDowTip(null)}>
-                    {/* Delta % */}
-                    <div style={{ fontSize: 9, fontWeight: 700, color: diff === null ? "transparent" : diff >= 0 ? C.green : "#ef4444", marginBottom: 1 }}>
-                      {diff !== null ? (diff >= 0 ? "+" : "") + diff.toFixed(0) + "%" : "·"}
-                    </div>
+                    onMouseEnter={() => setDowTip(d)} onMouseLeave={() => setDowTip(null)}
+                    onClick={() => setDowTip(v => v?.label === d.label ? null : d)}>
                     {/* Barre affiancate */}
-                    <div style={{ width: "100%", display: "flex", gap: 1, alignItems: "flex-end", height: 70 }}>
+                    <div style={{ width: "100%", display: "flex", gap: 1, alignItems: "flex-end", height: 80 }}>
                       <div style={{ flex: 1, height: `${h}%`, minHeight: d.fat > 0 ? 3 : 0,
                         background: d.fat > 0 ? C.blue : C.line, borderRadius: "3px 3px 0 0",
                         opacity: dowTip?.label === d.label ? 0.75 : 1 }} />
@@ -1444,20 +1441,26 @@ function StatisticheSection() {
                           background: "#A8B4E8", borderRadius: "3px 3px 0 0", opacity: 0.7 }} />
                       )}
                     </div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{d.label}</div>
+                    <div style={{ fontSize: 11, color: dowTip?.label === d.label ? C.blue : C.muted, fontWeight: dowTip?.label === d.label ? 700 : 400 }}>{d.label}</div>
                   </div>
                 );
               })}
             </div>
-            {dowTip && (
-              <div style={{ marginTop: 10, padding: "8px 12px", background: C.surface, borderRadius: 8, fontSize: 12.5, lineHeight: 1.7 }}>
-                <strong>{dowTip.label}</strong>
-                {" · "}Incasso: {euro(dowTip.fat)}
-                {dowTip.prevFat !== undefined && <span style={{ color: C.muted }}> (prec. {euro(dowTip.prevFat)})</span>}
-                {" · "}Ordini: {dowTip.ord}
-                {dowTip.avg > 0 && ` · Media: ${euro(dowTip.avg)}`}
-              </div>
-            )}
+            {dowTip && (() => {
+              const diff = dowTip.prevFat !== undefined && dowTip.prevFat > 0
+                ? ((dowTip.fat - dowTip.prevFat) / dowTip.prevFat * 100)
+                : null;
+              return (
+                <div style={{ marginTop: 10, padding: "8px 12px", background: C.surface, borderRadius: 8, fontSize: 12.5, lineHeight: 1.7 }}>
+                  <strong>{dowTip.label}</strong>
+                  {" · "}Incasso: {euro(dowTip.fat)}
+                  {dowTip.prevFat !== undefined && <span style={{ color: C.muted }}> (prec. {euro(dowTip.prevFat)})</span>}
+                  {diff !== null && <span style={{ color: diff >= 0 ? C.green : "#ef4444", fontWeight: 700 }}> {diff >= 0 ? "+" : ""}{diff.toFixed(0)}%</span>}
+                  {" · "}Ordini: {dowTip.ord}
+                  {dowTip.avg > 0 && ` · Media: ${euro(dowTip.avg)}`}
+                </div>
+              );
+            })()}
           </div>
         </div>
 

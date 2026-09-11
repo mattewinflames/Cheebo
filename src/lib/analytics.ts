@@ -212,7 +212,7 @@ export interface Analytics {
 
 const MESI = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
 const DOW_SHORT = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
-const DOW_ORDER = [1,2,3,4,5,6,0]; // Lun→Dom
+const DOW_ORDER = [2,3,4,5,6,0]; // Mar→Dom (Lun chiuso per policy)
 
 function fmtMin(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2,"0")}:${String(min % 60).padStart(2,"0")}`;
