@@ -39,7 +39,7 @@ const MENU = [
     ingredients: ["American cheese", "Bacon", "Cipolla", "Pickles", "Salsa Cheebo"],
     swaps: [{ id: "panevegano", name: "Pane vegano" }, { id: "formvegano", name: "Formaggio vegano" }] },
   { id: "smashveg", type: "smash", name: "Smash veg", desc: "Patty plant based, cipolla, veg cheddar, ketchup, senape", solo: 9.0, menu: 14.5, veg: true, allergens: [1,6,10], active: true, order: 4,
-    ingredients: ["Cheddar", "Cipolla", "Ketchup", "Senape"],
+    ingredients: ["Pane normale", "Cheddar", "Cipolla", "Ketchup", "Senape"],
     swaps: [{ id: "panevegano", name: "Pane vegano" }, { id: "vegcheddar", name: "Veg cheddar" }] },
   { id: "chicken",    type: "burger", name: "Chicken",     desc: "Pollo fritto, pickles, coleslaw, salsa bianca", solo: 9.0, menu: 14.5, veg: false, allergens: [1,3,7,8,10,12], active: true, order: 5, singleFormatOnly: true,
     ingredients: ["Salsa bianca", "Pickles", "Coleslaw"],
@@ -48,7 +48,7 @@ const MENU = [
     ingredients: ["Coleslaw"],
     swaps: [{ id: "panevegano", name: "Pane vegano" }] },
   { id: "burgerveg",  type: "burger", name: "Burgerveg",   desc: "Tofu affumicato fritto, pickles, coleslaw veg, salsa", solo: 9.0, menu: 14.5, veg: true, allergens: [1,6,10,12], active: true, order: 7, singleFormatOnly: true,
-    ingredients: ["Salsa", "Pickles", "Coleslaw veg"],
+    ingredients: ["Pane normale", "Salsa", "Pickles", "Coleslaw veg"],
     swaps: [{ id: "panevegano", name: "Pane vegano" }, { id: "coleslawveg", name: "Coleslaw vegana" }] },
 
   { id: "tender",   type: "side", name: "Tender di pollo",    price: 4.5, active: true, order: 8 },

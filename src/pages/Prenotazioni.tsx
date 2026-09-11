@@ -677,7 +677,20 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty }: {
   const price = cartPrice(cfg);
   const inCart = Object.keys(cart).filter((k) => k.startsWith(item.id + "|")).reduce((s, k) => s + cart[k].qty, 0);
   const bumpEx = (id: string, d: number) => setEx((p) => { const q = Math.max(0, (p[id] || 0) + d); const n = { ...p, [id]: q }; if (!q) delete n[id]; return n; });
-  const toggleRm = (ing: string) => setRemoved((r) => r.includes(ing) ? r.filter((x) => x !== ing) : [...r, ing]);
+  const toggleRm = (ing: string) => {
+    setRemoved((r) => {
+      const next = r.includes(ing) ? r.filter((x) => x !== ing) : [...r, ing];
+      // Se si rimuove "Pane normale" su un burger veg → attiva automaticamente pane vegano
+      if (ing === "Pane normale" && item.veg) {
+        const addingRemoval = !r.includes(ing);
+        setSwaps((s) => addingRemoval
+          ? s.includes("panevegano") ? s : [...s, "panevegano"]
+          : s.filter((x) => x !== "panevegano")
+        );
+      }
+      return next;
+    });
+  };
   const toggleSwap = (id: string) => setSwaps((v) => v.includes(id) ? v.filter((x) => x !== id) : [...v, id]);
   useEffect(() => {
     if (!open) return;
