@@ -50,14 +50,14 @@ function toASCII(text: string): string {
 
 // Mappa prefisso nome → categoria comanda (ordine di stampa)
 // La chiave è il prefisso lowercase dell'item (prima del " ·" o " +")
-const CATEGORIA_ORDER = ["SMASHBURGER", "BURGER", "CONTORNI", "SALSE", "DOLCI", "DRINKS"] as const;
+const CATEGORIA_ORDER = ["BURGER", "SMASHBURGER", "SIDES", "SALSE", "DOLCI", "DRINKS"] as const;
 type Categoria = typeof CATEGORIA_ORDER[number];
 
 function categoriaItem(nome: string): Categoria {
   const n = nome.toLowerCase().replace(/^\d+[×x]\s*/, "").trim();
   if (n.startsWith("classic") || n.startsWith("oklahoma") || n.startsWith("crispy") || n.startsWith("smash veg")) return "SMASHBURGER";
   if (n.startsWith("chicken") || n.startsWith("pulled pork") || n.startsWith("burgerveg")) return "BURGER";
-  if (n.startsWith("tender") || n.startsWith("patatine") || n.startsWith("polpette") || n.startsWith("box patatine")) return "CONTORNI";
+  if (n.startsWith("tender") || n.startsWith("patatine") || n.startsWith("polpette") || n.startsWith("box patatine")) return "SIDES";
   if (n.startsWith("salsa") || n.startsWith("ketchup") || n.startsWith("maionese") || n.startsWith("honey mustard") || n.startsWith("bbq") || n.startsWith("agrodolce") || n.startsWith("curry")) return "SALSE";
   if (n.startsWith("nutellone") || n.startsWith("cookies") || n.startsWith("cinnamon")) return "DOLCI";
   // drink: coca, fanta, 7up, the, acqua, iced tea, birra, ecc.
@@ -195,6 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Sezioni per categoria
   let hasContent = false;
+  const bibiteMenu: string[] = [];
   for (const cat of CATEGORIA_ORDER) {
     const items = gruppi.get(cat)!;
     if (items.length === 0) continue;
@@ -215,10 +216,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const rm of rimozioni) {
         for (const r of wrap(rm, W - 4, "   # ")) righe.push(r);
       }
-      // Bibita del menu → ultima riga del panino
-      if (menu) {
-        for (const r of wrap(menu, W - 3, "   ")) righe.push(r);
-      }
+      // Bibita del menu → accumulata in fondo
+      if (menu) bibiteMenu.push(...Array.from({ length: qty }, () => menu));
+    }
+    righe.push("");
+  }
+
+  // Bibite dei menu — raggruppate per nome in fondo
+  if (bibiteMenu.length > 0) {
+    const conteggiate = new Map<string, number>();
+    for (const b of bibiteMenu) conteggiate.set(b, (conteggiate.get(b) ?? 0) + 1);
+    righe.push("DRINKS");
+    for (const [nome, qty] of conteggiate.entries()) {
+      const qtyStr = String(qty);
+      const prefixLen = qtyStr.length + 2;
+      const nomeLines = wrap(nome, W - prefixLen);
+      righe.push(qtyStr + "  " + (nomeLines[0] ?? ""));
+      for (let i = 1; i < nomeLines.length; i++) righe.push(" ".repeat(prefixLen) + nomeLines[i]);
     }
     righe.push("");
   }

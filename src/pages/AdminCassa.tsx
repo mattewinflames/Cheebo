@@ -53,6 +53,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
         .griglia{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px}
         @media(max-width:980px){.cassa{grid-template-columns:1fr}.scontrino{position:static}}
         @media(max-width:860px){.cols{grid-template-columns:1fr}.piastra{position:static}}
+        @media(max-width:600px){.stats-kpi{grid-template-columns:repeat(2,1fr)!important}.stats-2col{grid-template-columns:1fr!important}}
         .comanda-print{display:none}`}</style>
       <div className="screen">
         <div style={{ position: "sticky", top: 0, background: C.bg, zIndex: 6, borderBottom: `1px solid ${C.line}` }}>
@@ -1291,7 +1292,7 @@ function StatisticheSection() {
       {!loading && orders.length > 0 && (<>
 
         {/* ── KPI ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
+        <div className="stats-kpi" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
           <KpiCard label="Ordini"       value={String(stats.ordini)}      trend={delta(stats.ordini, stats.prevOrdini)} />
           <KpiCard label="Incasso"    value={euro(stats.fatturato)}     trend={delta(stats.fatturato, stats.prevFatturato)} />
           <KpiCard label="Ordine medio" value={euro(stats.scontrinoMedio)} trend={delta(stats.scontrinoMedio, stats.prevScontrinoMedio)} />
@@ -1363,8 +1364,7 @@ function StatisticheSection() {
           </div>
 
 
-        {/* ── Extra / Salse / Bibite (box unico tabbato) + Giorno settimana ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div className="stats-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
           {(() => {
             type AddOnTab = "extra" | "salse" | "bibite";
             const tabItems: Record<AddOnTab, { name: string; qty: number; pct: number }[]> = {
@@ -1465,8 +1465,8 @@ function StatisticheSection() {
         </div>
 
         {/* ── Preferenze menù ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-          <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, gridColumn: "2" }}>
+        <div className="stats-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+          <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>🍟 Preferenze menù</div>
             {stats.menuTot === 0
               ? <div style={{ color: C.muted, fontSize: 13 }}>Nessun ordine con menù nel periodo.</div>
