@@ -117,8 +117,16 @@ function parseItem(raw: string): { qty: number; nome: string; menu: string | nul
       const voci = senzaMatch[1].split(/,\s*/);
       for (const v of voci) rimozioni.push("NO " + v.trim().toUpperCase());
     } else if (menuMatch) {
-      // "menu con coca-cola zero" → drink separato, nome panino riceve " MENU"
-      menu = menuMatch[1].trim().toUpperCase();
+      // "menu con coca-cola zero + bacon" → bibita="COCA-COLA ZERO", extra=["BACON"]
+      const rawMenu = menuMatch[1].trim();
+      const plusIdx = rawMenu.indexOf(" + ");
+      if (plusIdx !== -1) {
+        menu = rawMenu.slice(0, plusIdx).trim().toUpperCase();
+        const extraDaMenu = rawMenu.slice(plusIdx + 3).trim();
+        if (extraDaMenu) extras.push(extraDaMenu.toUpperCase());
+      } else {
+        menu = rawMenu.toUpperCase();
+      }
     } else {
       extras.push(p.toUpperCase());
     }
@@ -185,9 +193,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     dash(),
   ];
 
-  // Sezioni per categoria (senza le bibite del menu)
+  // Sezioni per categoria
   let hasContent = false;
-  const bibiteMenu: string[] = []; // bibite sganciate dai menu, stampate in fondo
   for (const cat of CATEGORIA_ORDER) {
     const items = gruppi.get(cat)!;
     if (items.length === 0) continue;
@@ -200,8 +207,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const nomeLines = wrap(nomeUp, W - prefixLen);
       righe.push(qtyStr + "  " + (nomeLines[0] ?? ""));
       for (let i = 1; i < nomeLines.length; i++) righe.push(" ".repeat(prefixLen) + nomeLines[i]);
-      // Bibita del menu → accumulata in fondo, non inline
-      if (menu) bibiteMenu.push(...Array.from({ length: qty }, () => menu));
       // Extra: "   * TESTO"
       for (const ex of extras) {
         for (const r of wrap(ex, W - 4, "   * ")) righe.push(r);
@@ -210,21 +215,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const rm of rimozioni) {
         for (const r of wrap(rm, W - 4, "   # ")) righe.push(r);
       }
-    }
-    righe.push("");
-  }
-
-  // Bibite sganciate dai menu — raggruppate per nome
-  if (bibiteMenu.length > 0) {
-    const conteggiate = new Map<string, number>();
-    for (const b of bibiteMenu) conteggiate.set(b, (conteggiate.get(b) ?? 0) + 1);
-    righe.push("DRINKS");
-    for (const [nome, qty] of conteggiate.entries()) {
-      const qtyStr = String(qty);
-      const prefixLen = qtyStr.length + 2;
-      const nomeLines = wrap(nome, W - prefixLen);
-      righe.push(qtyStr + "  " + (nomeLines[0] ?? ""));
-      for (let i = 1; i < nomeLines.length; i++) righe.push(" ".repeat(prefixLen) + nomeLines[i]);
+      // Bibita del menu → ultima riga del panino
+      if (menu) {
+        for (const r of wrap(menu, W - 3, "   ")) righe.push(r);
+      }
     }
     righe.push("");
   }
