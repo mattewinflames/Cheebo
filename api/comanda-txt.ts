@@ -185,25 +185,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     dash(),
   ];
 
-  // Sezioni per categoria
+  // Sezioni per categoria (senza le bibite del menu)
   let hasContent = false;
+  const bibiteMenu: string[] = []; // bibite sganciate dai menu, stampate in fondo
   for (const cat of CATEGORIA_ORDER) {
     const items = gruppi.get(cat)!;
     if (items.length === 0) continue;
     hasContent = true;
-    righe.push(cat);                  // intestazione categoria (es. "SMASHBURGER")
+    righe.push(cat);
     for (const { qty, nome, menu, extras, rimozioni } of items) {
       const qtyStr = String(qty);
       const nomeUp = (menu ? "MENU " : "") + nome.toUpperCase();
-      // Prima riga: "1  CRISPY SINGOLO MENU"
       const prefixLen = qtyStr.length + 2;
       const nomeLines = wrap(nomeUp, W - prefixLen);
       righe.push(qtyStr + "  " + (nomeLines[0] ?? ""));
       for (let i = 1; i < nomeLines.length; i++) righe.push(" ".repeat(prefixLen) + nomeLines[i]);
-      // Drink del menu: "   COCA-COLA ZERO" (senza asterisco)
-      if (menu) {
-        for (const r of wrap(menu, W - 3, "   ")) righe.push(r);
-      }
+      // Bibita del menu → accumulata in fondo, non inline
+      if (menu) bibiteMenu.push(...Array.from({ length: qty }, () => menu));
       // Extra: "   * TESTO"
       for (const ex of extras) {
         for (const r of wrap(ex, W - 4, "   * ")) righe.push(r);
@@ -213,7 +211,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (const r of wrap(rm, W - 4, "   # ")) righe.push(r);
       }
     }
-    righe.push(""); // spazio tra categorie
+    righe.push("");
+  }
+
+  // Bibite sganciate dai menu — raggruppate per nome
+  if (bibiteMenu.length > 0) {
+    const conteggiate = new Map<string, number>();
+    for (const b of bibiteMenu) conteggiate.set(b, (conteggiate.get(b) ?? 0) + 1);
+    righe.push("DRINKS");
+    for (const [nome, qty] of conteggiate.entries()) {
+      const qtyStr = String(qty);
+      const prefixLen = qtyStr.length + 2;
+      const nomeLines = wrap(nome, W - prefixLen);
+      righe.push(qtyStr + "  " + (nomeLines[0] ?? ""));
+      for (let i = 1; i < nomeLines.length; i++) righe.push(" ".repeat(prefixLen) + nomeLines[i]);
+    }
+    righe.push("");
   }
 
   if (!hasContent) righe.push("(nessun prodotto)");
