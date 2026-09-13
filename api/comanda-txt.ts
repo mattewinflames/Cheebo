@@ -208,10 +208,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const ex of extras) {
         for (const r of wrap(ex, W - 4, "   * ")) righe.push(r);
       }
-      // Rimozioni: "   # NO CIPOLLA"
-      if (rimozioni.length > 0) {
-        const tutte = rimozioni.join(" ");
-        for (const r of wrap(tutte, W - 4, "   # ")) righe.push(r);
+      // Rimozioni: una per riga "   # NO CIPOLLA"
+      for (const rm of rimozioni) {
+        for (const r of wrap(rm, W - 4, "   # ")) righe.push(r);
       }
     }
     righe.push(""); // spazio tra categorie
