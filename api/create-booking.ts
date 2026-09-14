@@ -65,6 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     | { ok: false; status: number; error: string; itemId?: string; left?: number };
 
   const specialBase = (id: string): number => byId.get(id)?.special?.stock ?? 0;
+  const limitedBase = (id: string): number => byId.get(id)?.limitedStock ?? 0;
 
   let out: TxOut;
   try {
@@ -77,6 +78,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const [id, qty] of Object.entries(resolved.specials)) {
         const remaining = stock[id] ?? specialBase(id);
         if (remaining < qty) return { ok: false, status: 409, error: "special esaurito", itemId: id, left: remaining };
+      }
+
+      // Validazione scorte limitate silenziose
+      const limitedItems = resolved.items
+        .map(label => menu.find(m => label.startsWith(m.name) && m.limitedStock != null))
+        .filter((m): m is typeof menu[0] => !!m);
+      const limitedQtys: Record<string, number> = {};
+      for (const m of limitedItems) limitedQtys[m.id] = (limitedQtys[m.id] ?? 0) + 1;
+      for (const [id, qty] of Object.entries(limitedQtys)) {
+        const remaining = stock[`limited_${id}`] ?? limitedBase(id);
+        if (remaining < qty) return { ok: false, status: 409, error: "item esaurito", itemId: id, left: remaining };
       }
 
       let plan: Placement;
@@ -95,6 +107,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       for (const w of plan.cells) led[w] += 1;
       for (const [id, qty] of Object.entries(resolved.specials)) stock[id] = (stock[id] ?? specialBase(id)) - qty;
+      for (const [id, qty] of Object.entries(limitedQtys)) {
+        stock[`limited_${id}`] = (stock[`limited_${id}`] ?? limitedBase(id)) - qty;
+      }
 
       tx.set(sessRef, {
         label: service.label ?? "", startMin: service.startMin, endMin: service.endMin,

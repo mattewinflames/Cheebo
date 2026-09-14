@@ -1699,6 +1699,21 @@ function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
         {panino && <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" }}><Switch on={!!item.veg} onClick={() => set("veg", !item.veg)} /> Vegetariano</label>}
         {panino && <label title="Se attivo, rientra nel limite della piastra (13 hamburger / 10 min). Se spento, ordinabile senza limiti." style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" }}><Switch on={!!item.griddle} onClick={() => set("griddle", !item.griddle)} /> Da piastra (smash)</label>}
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" }}><Switch on={item.active} onClick={() => set("active", !item.active)} /> Attivo sul sito</label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" }}>
+          <Switch on={item.limitedStock != null} onClick={() => set("limitedStock", item.limitedStock != null ? null : 10)} />
+          Scorta limitata
+        </label>
+        {item.limitedStock != null && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingLeft: 36 }}>
+            <span style={{ fontSize: 13, color: C.muted }}>Quantità disponibile:</span>
+            <input
+              type="number" min={0} max={999} value={item.limitedStock}
+              onChange={e => set("limitedStock", Math.max(0, parseInt(e.target.value) || 0))}
+              style={{ width: 70, padding: "5px 8px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, textAlign: "center" }}
+            />
+            <span style={{ fontSize: 12, color: C.muted }}>(0 = esaurito, item nascosto)</span>
+          </div>
+        )}
         {panino && (
           <label title="Proposta a disponibilità limitata: attiva solo nelle sessioni scelte, con un numero di pezzi per sessione."
                  style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" }}>

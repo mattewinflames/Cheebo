@@ -54,6 +54,9 @@ export interface MenuItem {
   singleFormatOnly?: boolean;
   /** Proposta speciale a disponibilità limitata (vedi SpecialConfig). */
   special?: SpecialConfig;
+  /** Scorta silenziosa: se impostata, l'item sparisce quando lo stock si esaurisce.
+   *  Non visibile al cliente — solo l'admin la configura. */
+  limitedStock?: number;
   // voci semplici (side | dolce | drink)
   price?: number;
   /** Solo drink: sovrapprezzo se scelta dentro un menu. Se assente si ricava

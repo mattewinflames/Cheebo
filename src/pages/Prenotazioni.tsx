@@ -242,12 +242,13 @@ export default function Prenotazioni() {
               </div>
             )}
             <Ghost t="Smashburgers" />
-            {menu.filter((m) => m.type === "smash" && !m.special).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
+            {menu.filter((m) => m.type === "smash" && !m.special && (m.limitedStock == null || (stock?.[`limited_${m.id}`] ?? m.limitedStock) > 0)).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
+
             <Ghost t="Burgers" />
-            {menu.filter((m) => m.type === "burger" && !m.special).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
+            {menu.filter((m) => m.type === "burger" && !m.special && (m.limitedStock == null || (stock?.[`limited_${m.id}`] ?? m.limitedStock) > 0)).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
             {menu.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: "16px 0" }}>Caricamento menu…</div>}
             {(["side", "salsa", "dolce", "drink"] as const).map((t) => {
-              const items = menu.filter((m) => m.type === t);
+              const items = menu.filter((m) => m.type === t && (m.limitedStock == null || (stock?.[`limited_${m.id}`] ?? m.limitedStock) > 0));
               if (items.length === 0) return null;
               const title = t === "side" ? "Sides" : t === "salsa" ? "Salse" : t === "dolce" ? "Dolci" : "Drinks";
               return (

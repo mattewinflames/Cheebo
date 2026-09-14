@@ -1,7 +1,6 @@
-/* CHEEBO · Menu store (Firestore) — tutte le voci del menu */
 import {
   collection, doc, onSnapshot, query, orderBy, where,
-  setDoc, updateDoc, deleteDoc, serverTimestamp,
+  setDoc, updateDoc, deleteDoc, serverTimestamp, deleteField,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { MenuItem } from "./menu";
@@ -16,7 +15,10 @@ export function subscribeMenu(cb: (items: MenuItem[]) => void, onlyActive = fals
 
 export async function saveItem(item: MenuItem): Promise<void> {
   const { id, ...data } = item;
-  await setDoc(doc(db, "menu", id), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+  // limitedStock null → rimuove il campo da Firestore (torna a vendita libera)
+  const payload: Record<string, unknown> = { ...data, updatedAt: serverTimestamp() };
+  if (payload["limitedStock"] == null) payload["limitedStock"] = deleteField();
+  await setDoc(doc(db, "menu", id), payload, { merge: true });
 }
 export async function setActive(id: string, active: boolean): Promise<void> {
   await updateDoc(doc(db, "menu", id), { active, updatedAt: serverTimestamp() });
