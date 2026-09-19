@@ -455,7 +455,41 @@ export default function Prenotazioni() {
         </a>
       </div>
 
-      {/* Modale avviso orario cambiato (#66) */}
+      {/* Overlay animazione pagamento */}
+      {busy && createPortal(
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        }}>
+          <style>{`
+            @keyframes cb-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+            @keyframes cb-spin { to{transform:rotate(360deg)} }
+          `}</style>
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", width:360 }}>
+            <img
+              src="/cheebo-logo.png" alt="Cheebo"
+              width={110} height={110}
+              style={{ borderRadius:"50%", animation:"cb-bob 3s ease-in-out infinite" }}
+            />
+            <div style={{
+              marginTop: 18, width: 36, height: 36,
+              border: "2.5px solid rgba(43,45,138,0.15)",
+              borderTopColor: "#2B2D8A",
+              borderRadius: "50%",
+              animation: "cb-spin 0.9s linear infinite",
+            }} />
+            <div style={{ marginTop:20, fontSize:20, fontWeight:700, color:"#1a1a3e", whiteSpace:"nowrap", letterSpacing:"-0.01em" }}>
+              Sto confermando il pagamento…
+            </div>
+            <div style={{ marginTop:6, fontSize:13, color:"rgba(30,30,60,0.5)", textAlign:"center" }}>
+              Un attimo: sto registrando la tua prenotazione.
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       {slotWarning && createPortal(
         <>
           <div className="cb-scrim" onClick={() => { setSlotWarning(null); setBusy(false); }} />

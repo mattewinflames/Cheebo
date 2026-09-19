@@ -55,6 +55,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const resolved = resolveCart(menu, serviceKey, cart, costoServizio);
   if (isResolveError(resolved)) return res.status(400).json({ error: resolved.error });
 
+
+
   const n = totalWindows(service);
   const minW = minWindowNow(serviceKey, service, now);
   const sessRef = adminDb.collection(SESSIONS).doc(serviceKey);
