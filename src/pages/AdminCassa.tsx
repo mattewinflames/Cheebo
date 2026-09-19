@@ -901,7 +901,7 @@ function OrdiniSection() {
               <span style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 5 }}><Flame size={13} color={C.redline} />{CAP}/10 min</span>
             </div>
             {Array.from({ length: shown }).map((_, wi) => {
-              const used = fill[wi] || 0, confirmed = confirmedFill[wi] || 0, pending = Math.max(0, used - confirmed), wStart = windowStartMin(service, wi), here = orders.filter((c) => c.windowIndex === wi && c.patties > 0), isNow = wi === curWi, empty = used === 0;
+              const used = fill[wi] || 0, confirmed = confirmedFill[wi] || 0, pending = Math.max(0, used - confirmed), wStart = windowStartMin(service, wi), here = orders.filter((c) => c.patties > 0 && (Array.isArray(c.cells) && c.cells.length > 0 ? c.cells.includes(wi) : c.windowIndex === wi)), isNow = wi === curWi, empty = used === 0;
               const isOverflow = used > CAP;
               const overflowDelta = isOverflow ? used - CAP : 0;
               return (

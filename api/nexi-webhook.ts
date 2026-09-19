@@ -122,7 +122,8 @@ async function confirm(holdId: string, nexiOperationId: string): Promise<void> {
     const orderRef = adminDb.collection(ORDERS).doc();
     tx.set(orderRef, {
       serviceKey: hold.serviceKey, name: hold.name, items: hold.items, patties: hold.patties,
-      windowIndex: hold.windowIndex, readyMin: hold.readyMin, mode: hold.mode, pay: "online",
+      windowIndex: hold.windowIndex, readyMin: hold.readyMin, cells: hold.cells ?? [],
+      mode: hold.mode, pay: "online",
       total: hold.total, code, phone: hold.phone, channel: "prenotazione",
       status: "nuovo", createdAt: FieldValue.serverTimestamp(),
       nexiOperationId,

@@ -47,6 +47,7 @@ export interface Order {
   patties: number;
   windowIndex: number;
   readyMin: number;
+  cells?: number[];   // finestre piastra occupate — assente su ordini pre-fix (fallback su windowIndex)
   mode: BookingMode;
   pay: PayMethod;
   total: number;
