@@ -812,6 +812,7 @@ function OrdiniSection() {
     if (!sessionKey) return;
     setLoadErr(null);
     setCellaPopup(null);
+    setSelectedOrderId(null);
     return subscribeOrders(sessionKey, (o) => { setOrders(o); setLoadErr(null); },
       () => setLoadErr("Impossibile caricare gli ordini. Controlla la connessione e riprova."));
   }, [sessionKey]);
@@ -824,6 +825,8 @@ function OrdiniSection() {
   useEffect(() => { const after = () => setPrintOrder(null); window.addEventListener("afterprint", after); return () => window.removeEventListener("afterprint", after); }, []);
   // Popup cella piastra: { wi, cellIndex } → mostra a chi appartiene quella cella
   const [cellaPopup, setCellaPopup] = useState<{ wi: number; cellIndex: number } | null>(null);
+  // Ordine selezionato per highlight celle in tutte le fasce
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const [printing, setPrinting] = useState<string | null>(null); // orderId in corso
   const [printStatus, setPrintStatus] = useState<string>(""); // stato verboso stampa
@@ -942,7 +945,11 @@ function OrdiniSection() {
                             const isConfirmed = s < Math.min(confirmed, CAP);
                             const isPending = !isConfirmed && s < Math.min(used, CAP);
                             const isOccupied = s < used;
-                            const bg = isConfirmed ? (isOverflow ? C.amber : C.blue) : isPending ? "#F4A8A8" : "#DEDEEC";
+                            const cellOwner = cellMap[s];
+                            const isHighlighted = selectedOrderId !== null && cellOwner?.id === selectedOrderId;
+                            const isDimmed = selectedOrderId !== null && isOccupied && !isHighlighted;
+                            const baseBg = isConfirmed ? (isOverflow ? C.amber : C.blue) : isPending ? "#F4A8A8" : "#DEDEEC";
+                            const bg = isDimmed ? "#DEDEEC" : isHighlighted ? "#FFD600" : baseBg;
                             const isActive = cellaPopup?.wi === wi && cellaPopup?.cellIndex === s;
                             return (
                               <div
@@ -953,7 +960,7 @@ function OrdiniSection() {
                                   cursor: isOccupied ? "pointer" : "default",
                                   outline: isActive ? `2px solid ${C.ink}` : "none",
                                   outlineOffset: 1,
-                                  transition: "outline 0.1s",
+                                  transition: "background 0.15s, outline 0.1s",
                                 }}
                               />
                             );
@@ -961,16 +968,22 @@ function OrdiniSection() {
                           {isOverflow && Array.from({ length: overflowDelta }).map((_, s) => {
                             const sAbs = CAP + s;
                             const isOccupied = sAbs < used;
+                            const cellOwner = cellMap[sAbs];
+                            const isHighlighted = selectedOrderId !== null && cellOwner?.id === selectedOrderId;
+                            const isDimmed = selectedOrderId !== null && isOccupied && !isHighlighted;
                             const isActive = cellaPopup?.wi === wi && cellaPopup?.cellIndex === sAbs;
                             return (
                               <div
                                 key={`ov-${s}`}
                                 onClick={isOccupied ? () => setCellaPopup(isActive ? null : { wi, cellIndex: sAbs }) : undefined}
                                 style={{
-                                  flex: 1, height: 14, borderRadius: 3, background: C.amberBg,
-                                  border: `1.5px solid ${C.amber}`, cursor: isOccupied ? "pointer" : "default",
+                                  flex: 1, height: 14, borderRadius: 3,
+                                  background: isHighlighted ? "#FFD600" : isDimmed ? "#DEDEEC" : C.amberBg,
+                                  border: isHighlighted ? "1.5px solid #B8A000" : isDimmed ? `1px solid ${C.line}` : `1.5px solid ${C.amber}`,
+                                  cursor: isOccupied ? "pointer" : "default",
                                   outline: isActive ? `2px solid ${C.ink}` : "none",
                                   outlineOffset: 1,
+                                  transition: "background 0.15s",
                                 }}
                               />
                             );
@@ -1022,7 +1035,31 @@ function OrdiniSection() {
                       </div>
                     );
                   })()}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>{here.map((c) => <span key={c.id} style={{ fontSize: 11, background: C.bg, border: `1px solid ${C.line}`, borderRadius: 20, padding: "2px 9px" }}>{c.name} · {c.patties}p{c.mode === "at" ? " · scelto" : ""}</span>)}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {here.map((c) => {
+                      const cellsOfOrder: number[] = Array.isArray(c.cells) && c.cells.length > 0 ? c.cells : [];
+                      const hasBefore = cellsOfOrder.some((w) => w < wi);
+                      const hasAfter = cellsOfOrder.some((w) => w > wi);
+                      const direction = hasBefore && hasAfter ? " · ↑↓" : hasAfter ? " · ↓" : hasBefore ? " · ↑" : "";
+                      const isSelected = selectedOrderId === c.id;
+                      return (
+                        <span
+                          key={c.id}
+                          onClick={() => setSelectedOrderId(isSelected ? null : c.id)}
+                          style={{
+                            fontSize: 11, borderRadius: 20, padding: "2px 9px", cursor: "pointer",
+                            background: isSelected ? C.ink : C.bg,
+                            color: isSelected ? "#fff" : C.ink,
+                            border: isSelected ? `1px solid ${C.ink}` : `1px solid ${C.line}`,
+                            transition: "background 0.15s, color 0.15s",
+                            userSelect: "none",
+                          }}
+                        >
+                          {c.name} · {c.patties}p{direction}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
