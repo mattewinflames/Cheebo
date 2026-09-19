@@ -948,7 +948,7 @@ function OrdiniSection() {
                             const cellOwner = cellMap[s];
                             const isHighlighted = selectedOrderId !== null && cellOwner?.id === selectedOrderId;
                             const isDimmed = selectedOrderId !== null && isOccupied && !isHighlighted;
-                            const baseBg = isConfirmed ? (isOverflow ? C.amber : C.blue) : isPending ? "#F4A8A8" : "#DEDEEC";
+                            const baseBg = isConfirmed ? C.blue : isPending ? "#F4A8A8" : "#DEDEEC";
                             const bg = isDimmed ? "#DEDEEC" : isHighlighted ? "#FFD600" : baseBg;
                             const isActive = cellaPopup?.wi === wi && cellaPopup?.cellIndex === s;
                             return (
@@ -956,34 +956,11 @@ function OrdiniSection() {
                                 key={s}
                                 onClick={isOccupied ? () => setCellaPopup(isActive ? null : { wi, cellIndex: s }) : undefined}
                                 style={{
-                                  flex: 1, height: 14, borderRadius: 3, background: bg,
+                                  flex: 1, height: 9, borderRadius: 2, background: bg,
                                   cursor: isOccupied ? "pointer" : "default",
                                   outline: isActive ? `2px solid ${C.ink}` : "none",
                                   outlineOffset: 1,
                                   transition: "background 0.15s, outline 0.1s",
-                                }}
-                              />
-                            );
-                          })}
-                          {isOverflow && Array.from({ length: overflowDelta }).map((_, s) => {
-                            const sAbs = CAP + s;
-                            const isOccupied = sAbs < used;
-                            const cellOwner = cellMap[sAbs];
-                            const isHighlighted = selectedOrderId !== null && cellOwner?.id === selectedOrderId;
-                            const isDimmed = selectedOrderId !== null && isOccupied && !isHighlighted;
-                            const isActive = cellaPopup?.wi === wi && cellaPopup?.cellIndex === sAbs;
-                            return (
-                              <div
-                                key={`ov-${s}`}
-                                onClick={isOccupied ? () => setCellaPopup(isActive ? null : { wi, cellIndex: sAbs }) : undefined}
-                                style={{
-                                  flex: 1, height: 14, borderRadius: 3,
-                                  background: isHighlighted ? "#FFD600" : isDimmed ? "#DEDEEC" : C.amberBg,
-                                  border: isHighlighted ? "1.5px solid #B8A000" : isDimmed ? `1px solid ${C.line}` : `1.5px solid ${C.amber}`,
-                                  cursor: isOccupied ? "pointer" : "default",
-                                  outline: isActive ? `2px solid ${C.ink}` : "none",
-                                  outlineOffset: 1,
-                                  transition: "background 0.15s",
                                 }}
                               />
                             );
@@ -1021,6 +998,13 @@ function OrdiniSection() {
                                   <div style={{ fontWeight: 700, fontSize: 15, color: C.ink, marginBottom: 2 }}>{owner.name}</div>
                                   <div style={{ fontSize: 12.5, color: C.muted }}>
                                     {owner.patties} patty totali · {countInWi} in questa fascia
+                                    {isOverflow && countInWi > 0 && (() => {
+                                      const othersInWi = used - countInWi;
+                                      const overflowOfOwner = Math.max(0, countInWi - Math.max(0, CAP - othersInWi));
+                                      return overflowOfOwner > 0
+                                        ? <span style={{ marginLeft: 4, color: C.amber, fontWeight: 700 }}>({overflowOfOwner} in overflow)</span>
+                                        : null;
+                                    })()}
                                   </div>
                                   <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
                                     {fmt(owner.readyMin)} · #{owner.code} · {owner.mode === "at" ? "orario scelto" : "primo disponibile"}
@@ -1045,9 +1029,10 @@ function OrdiniSection() {
                       return (
                         <span
                           key={c.id}
-                          onClick={() => setSelectedOrderId(isSelected ? null : c.id)}
+                          onClick={() => { setSelectedOrderId(isSelected ? null : c.id); setCellaPopup(null); }}
                           style={{
                             fontSize: 11, borderRadius: 20, padding: "2px 9px", cursor: "pointer",
+                            display: "inline-flex", alignItems: "center", gap: 5,
                             background: isSelected ? C.ink : C.bg,
                             color: isSelected ? "#fff" : C.ink,
                             border: isSelected ? `1px solid ${C.ink}` : `1px solid ${C.line}`,
