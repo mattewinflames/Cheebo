@@ -811,6 +811,7 @@ function OrdiniSection() {
   useEffect(() => {
     if (!sessionKey) return;
     setLoadErr(null);
+    setCellaPopup(null);
     return subscribeOrders(sessionKey, (o) => { setOrders(o); setLoadErr(null); },
       () => setLoadErr("Impossibile caricare gli ordini. Controlla la connessione e riprova."));
   }, [sessionKey]);
@@ -821,6 +822,9 @@ function OrdiniSection() {
     return subscribeHoldsConfirmed(sessionKey, n, setConfirmedFill);
   }, [sessionKey, service?.startMin]);
   useEffect(() => { const after = () => setPrintOrder(null); window.addEventListener("afterprint", after); return () => window.removeEventListener("afterprint", after); }, []);
+  // Popup cella piastra: { wi, cellIndex } → mostra a chi appartiene quella cella
+  const [cellaPopup, setCellaPopup] = useState<{ wi: number; cellIndex: number } | null>(null);
+
   const [printing, setPrinting] = useState<string | null>(null); // orderId in corso
   const [printStatus, setPrintStatus] = useState<string>(""); // stato verboso stampa
   const printingRef = useRef<string | null>(null); // lock sincrono anti-doppio-click
@@ -913,16 +917,111 @@ function OrdiniSection() {
                       <span style={{ fontSize: 11.5, fontWeight: used ? 700 : 400, color: used >= CAP ? (isOverflow ? C.amber : C.redline) : empty ? "#b9b9cc" : C.muted }}>{empty ? "libera" : isOverflow ? `${CAP}+${overflowDelta}` : `${used}/${CAP}${used === CAP ? " · piena" : ""}`}</span>
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 3, marginBottom: here.length ? 6 : 0 }}>
-                    {Array.from({ length: CAP }).map((_, s) => {
-                      const isConfirmed = s < Math.min(confirmed, CAP);
-                      const isPending = !isConfirmed && s < Math.min(used, CAP);
-                      const isOverflowCell = s >= CAP;
-                      const bg = isConfirmed ? (isOverflow ? C.amber : C.blue) : isPending ? "#F4A8A8" : "#DEDEEC";
-                      return <div key={s} style={{ flex: 1, height: 9, borderRadius: 2, background: bg }} />;
-                    })}
-                    {isOverflow && Array.from({ length: overflowDelta }).map((_, s) => <div key={`ov-${s}`} style={{ flex: 1, height: 9, borderRadius: 2, background: C.amberBg, border: `1.5px solid ${C.amber}` }} />)}
-                  </div>
+                  {(() => {
+                    // Mappa posizionale: per ogni cella occupata in questa finestra,
+                    // a quale ordine appartiene? Scorre gli ordini che hanno celle in wi,
+                    // assegna le posizioni in sequenza per createdAt.
+                    const ordersInWi = here
+                      .map((o) => ({
+                        order: o,
+                        countInWi: Array.isArray(o.cells) && o.cells.length > 0
+                          ? o.cells.filter((c) => c === wi).length
+                          : (o.windowIndex === wi ? o.patties : 0),
+                      }))
+                      .filter((x) => x.countInWi > 0);
+                    // cellMap[s] = Order | null
+                    const cellMap: (Order | null)[] = new Array(used).fill(null);
+                    let cursor = 0;
+                    for (const { order, countInWi } of ordersInWi) {
+                      for (let i = 0; i < countInWi && cursor < cellMap.length; i++) cellMap[cursor++] = order;
+                    }
+                    return (
+                      <div style={{ position: "relative" }}>
+                        <div style={{ display: "flex", gap: 3, marginBottom: here.length ? 6 : 0 }}>
+                          {Array.from({ length: CAP }).map((_, s) => {
+                            const isConfirmed = s < Math.min(confirmed, CAP);
+                            const isPending = !isConfirmed && s < Math.min(used, CAP);
+                            const isOccupied = s < used;
+                            const bg = isConfirmed ? (isOverflow ? C.amber : C.blue) : isPending ? "#F4A8A8" : "#DEDEEC";
+                            const isActive = cellaPopup?.wi === wi && cellaPopup?.cellIndex === s;
+                            return (
+                              <div
+                                key={s}
+                                onClick={isOccupied ? () => setCellaPopup(isActive ? null : { wi, cellIndex: s }) : undefined}
+                                style={{
+                                  flex: 1, height: 14, borderRadius: 3, background: bg,
+                                  cursor: isOccupied ? "pointer" : "default",
+                                  outline: isActive ? `2px solid ${C.ink}` : "none",
+                                  outlineOffset: 1,
+                                  transition: "outline 0.1s",
+                                }}
+                              />
+                            );
+                          })}
+                          {isOverflow && Array.from({ length: overflowDelta }).map((_, s) => {
+                            const sAbs = CAP + s;
+                            const isOccupied = sAbs < used;
+                            const isActive = cellaPopup?.wi === wi && cellaPopup?.cellIndex === sAbs;
+                            return (
+                              <div
+                                key={`ov-${s}`}
+                                onClick={isOccupied ? () => setCellaPopup(isActive ? null : { wi, cellIndex: sAbs }) : undefined}
+                                style={{
+                                  flex: 1, height: 14, borderRadius: 3, background: C.amberBg,
+                                  border: `1.5px solid ${C.amber}`, cursor: isOccupied ? "pointer" : "default",
+                                  outline: isActive ? `2px solid ${C.ink}` : "none",
+                                  outlineOffset: 1,
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                        {cellaPopup?.wi === wi && (() => {
+                          const owner = cellMap[cellaPopup.cellIndex] ?? null;
+                          const countInWi = owner
+                            ? (Array.isArray(owner.cells) && owner.cells.length > 0
+                              ? owner.cells.filter((c) => c === wi).length
+                              : owner.patties)
+                            : 0;
+                          return (
+                            <div
+                              style={{
+                                position: "absolute", top: 20, left: 0, zIndex: 50,
+                                background: "#fff", border: `1.5px solid ${C.line}`,
+                                borderRadius: 10, padding: "10px 14px", minWidth: 200,
+                                boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                  Cella {cellaPopup.cellIndex + 1}
+                                </span>
+                                <button
+                                  onClick={() => setCellaPopup(null)}
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, padding: 0, lineHeight: 1 }}
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                              {owner ? (
+                                <>
+                                  <div style={{ fontWeight: 700, fontSize: 15, color: C.ink, marginBottom: 2 }}>{owner.name}</div>
+                                  <div style={{ fontSize: 12.5, color: C.muted }}>
+                                    {owner.patties} patty totali · {countInWi} in questa fascia
+                                  </div>
+                                  <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                                    {fmt(owner.readyMin)} · #{owner.code} · {owner.mode === "at" ? "orario scelto" : "primo disponibile"}
+                                  </div>
+                                </>
+                              ) : (
+                                <div style={{ fontSize: 13, color: C.muted }}>Cella non mappata</div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })()}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>{here.map((c) => <span key={c.id} style={{ fontSize: 11, background: C.bg, border: `1px solid ${C.line}`, borderRadius: 20, padding: "2px 9px" }}>{c.name} · {c.patties}p{c.mode === "at" ? " · scelto" : ""}</span>)}</div>
                 </div>
               );
