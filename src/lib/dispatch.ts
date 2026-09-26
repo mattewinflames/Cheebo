@@ -133,12 +133,21 @@ export function applyPlacement(ledger: Ledger, p: Placement): Ledger {
   return next;
 }
 
-/** Gli orari prenotabili per un ordine da `patties`: dalla prima finestra fattibile (>= minWindow) in poi. */
+/** Gli orari prenotabili per un ordine da `patties`: tutte le finestre (>= minWindow)
+ *  in cui planAt avrebbe successo, cioè in cui c'è spazio cumulato sufficiente
+ *  E la finestra stessa non è completamente piena (windowCapacity > 0). */
 export function bookableWindows(ledger: Ledger, patties: number, minWindow = 0): number[] {
-  const ff = firstFeasibleWindow(ledger, patties, minWindow);
-  if (ff < 0) return [];
+  const n = ledger.length;
+  const start = Math.max(0, minWindow);
   const out: number[] = [];
-  for (let T = ff; T < ledger.length; T++) out.push(T);
+  for (let T = start; T < n; T++) {
+    // La finestra è prenotabile solo se:
+    // 1. c'è abbastanza spazio cumulato da start a T per i patty richiesti
+    // 2. la finestra T stessa ha ancora capacità (altrimenti planAt non la usa come destinazione)
+    if (freeInRange(ledger, start, T, patties) >= patties && windowCapacity(ledger[T], patties) > 0) {
+      out.push(T);
+    }
+  }
   return out;
 }
 
