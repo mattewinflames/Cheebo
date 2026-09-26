@@ -6,7 +6,7 @@ import {
   cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, isSpecialActive, specialLeft, SPECIAL_LOW,
   type FormatId, type CartType, type CartLine, type MenuItem, type PaninoConfig, type CartReq,
 } from "../lib/menu";
-import { totalWindows, planFirst, planAt, firstFeasibleWindow, windowEndMin, fmt, type Service } from "../lib/dispatch";
+import { totalWindows, planFirst, planAt, firstFeasibleWindow, windowEndMin, windowCapacity, fmt, type Service } from "../lib/dispatch";
 import { subscribeMenu } from "../lib/menuStore";
 import { subscribeSettings, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
 import { submitBooking, startCheckout, subscribeLedger, PAY_ENABLED, PAY_DEFAULT, type BookingMode, type PayMethod } from "../lib/orders";
@@ -115,7 +115,12 @@ export default function Prenotazioni() {
     const firstOk = firstFeasibleWindow(ledger, patties, minW); // patties=0 -> minW (nessun limite di piastra)
     const out: { window: number; readyMin: number; full: boolean }[] = [];
     for (let w = minW; w < n; w++) {
-      out.push({ window: w, readyMin: windowEndMin(service, w), full: firstOk < 0 || w < firstOk });
+      // Una finestra è disponibile solo se:
+      // 1. c'è spazio cumulato sufficiente fino a lei (firstOk >= 0 e w >= firstOk)
+      // 2. la finestra stessa ha capacità per questo orderSize (non è a 13/13 o oltre)
+      const cumulOk = firstOk >= 0 && w >= firstOk;
+      const windowOk = patties === 0 || windowCapacity(ledger[w] ?? 0, patties) > 0;
+      out.push({ window: w, readyMin: windowEndMin(service, w), full: !cumulOk || !windowOk });
     }
     return out;
   }, [ledger, patties, service?.startMin, sessionKey]);
