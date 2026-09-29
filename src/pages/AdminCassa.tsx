@@ -1886,12 +1886,20 @@ function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
           <div style={{ fontSize: 11.5, color: "#8A5B12", marginTop: 10, lineHeight: 1.45 }}>
             I pezzi valgono <b>per singola sessione</b>: ogni servizio riparte dal numero indicato.
             Finito lo stock, lo special appare "esaurito" e non è più ordinabile.
-            {item.special.serviceKeys.length === 0
-              ? <><br /><b>Nessuna sessione selezionata: lo special non comparirà.</b></>
-              : <><br />Selezionate: <b>{item.special.serviceKeys.map((k) => {
-                    const sx = sessioni.find((x) => x.serviceKey === k);
-                    return sx ? `${sx.dayLabel} · ${sx.label.toLowerCase()}` : k;
-                  }).join(" — ")}</b></>}
+            {(() => {
+              const note = item.special!.serviceKeys
+                .map((k) => { const sx = sessioni.find((x) => x.serviceKey === k); return sx ? `${sx.dayLabel} · ${sx.label.toLowerCase()}` : null; })
+                .filter(Boolean) as string[];
+              const stale = item.special!.serviceKeys.filter((k) => !sessioni.find((x) => x.serviceKey === k));
+              if (item.special!.serviceKeys.length === 0)
+                return <><br /><b>Nessuna sessione selezionata: lo special non comparirà.</b></>;
+              return <>
+                <br />Selezionate: <b>{note.length > 0 ? note.join(" — ") : "—"}</b>
+                {stale.length > 0 && <> · <span style={{ color: C.muted }}>{stale.length} scadut{stale.length === 1 ? "a" : "e"}</span>{" "}
+                  <button onClick={() => set("special", { ...item.special!, serviceKeys: item.special!.serviceKeys.filter((k) => sessioni.find((x) => x.serviceKey === k)) })}
+                    style={{ background: "none", border: "none", color: "#8A5B12", textDecoration: "underline", cursor: "pointer", fontSize: 11.5, fontWeight: 600, padding: 0 }}>Rimuovi</button></>}
+              </>;
+            })()}
           </div>
         </div>
       )}
