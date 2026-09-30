@@ -1788,6 +1788,31 @@ function mancanzeVoce(item: EditItem): string[] {
   return m;
 }
 
+function PriceInput({ value, onChange, style }: { value: number; onChange: (v: number) => void; style?: React.CSSProperties }) {
+  const [str, setStr] = useState(String(value || ""));
+  const lastRef = useRef(value);
+  useEffect(() => {
+    if (lastRef.current !== value) {
+      setStr(String(value || ""));
+      lastRef.current = value;
+    }
+  }, [value]);
+  return (
+    <input
+      value={str}
+      onChange={(e) => setStr(e.target.value)}
+      onBlur={(e) => {
+        const v = parseFloat(e.target.value.replace(",", ".")) || 0;
+        lastRef.current = v;
+        setStr(String(v));
+        onChange(v);
+      }}
+      inputMode="decimal"
+      style={style}
+    />
+  );
+}
+
 function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
   item: EditItem; onChange: (e: EditItem) => void; onSave: (e: EditItem) => void;
   onCancel: () => void; onDelete?: () => void;
@@ -1807,14 +1832,14 @@ function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
         <>
           <Field label="Descrizione"><textarea value={item.desc ?? ""} onChange={(e) => set("desc", e.target.value)} rows={2} style={{ ...inp, resize: "vertical" }} /></Field>
           <div style={{ display: "flex", gap: 12 }}>
-            <Field label="Prezzo solo (€)" flex><input value={String(item.solo ?? 0)} onChange={(e) => set("solo", Number(e.target.value.replace(",", ".")) || 0)} inputMode="decimal" style={inp} /></Field>
-            <Field label="Prezzo menu (€)" flex><input value={String(item.menu ?? 0)} onChange={(e) => set("menu", Number(e.target.value.replace(",", ".")) || 0)} inputMode="decimal" style={inp} /></Field>
+            <Field label="Prezzo solo (€)" flex><PriceInput value={item.solo ?? 0} onChange={(v) => set("solo", v)} style={inp} /></Field>
+            <Field label="Prezzo menu (€)" flex><PriceInput value={item.menu ?? 0} onChange={(v) => set("menu", v)} style={inp} /></Field>
           </div>
           {item.special && <div style={{ fontSize: 11.5, color: "#8A5B12", marginTop: 4 }}>Lo special è <b>fuori menù</b>: conta il prezzo «solo». Il prezzo menu è facoltativo e, se lasciato a 0, viene ignorato.</div>}
           <Field label="Allergeni (es. 1,3,7)"><input value={item.allergStr ?? ""} onChange={(e) => set("allergStr", e.target.value)} style={inp} /></Field>
         </>
       ) : (
-        <Field label="Prezzo (€)"><input value={String(item.price ?? 0)} onChange={(e) => set("price", Number(e.target.value.replace(",", ".")) || 0)} inputMode="decimal" style={inp} /></Field>
+        <Field label="Prezzo (€)"><PriceInput value={item.price ?? 0} onChange={(v) => set("price", v)} style={inp} /></Field>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 6, flexWrap: "wrap", rowGap: 10 }}>
         {panino && <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" }}><Switch on={!!item.veg} onClick={() => set("veg", !item.veg)} /> Vegetariano</label>}
