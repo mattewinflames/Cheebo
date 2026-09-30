@@ -78,7 +78,8 @@ export interface ParsedItem {
   isPanino: boolean;
   isMenu: boolean;
   isSalsa: boolean;
-  isSide: boolean;       // side non-panino (patatine, tender, dolci…)
+  isSide: boolean;       // side non-panino (patatine, tender, polpette…)
+  isDolce: boolean;      // dolce (cookies, nutellone, cinnamon)
   drink?: string;        // bibita nel menu
   sideChoice?: "normali" | "dolci";
   extras: string[];      // es. ["bacon", "cheddar"]
