@@ -104,10 +104,12 @@ export function parseItem(raw: string): ParsedItem {
     lower.includes("chicken") || lower.includes("pulled") || lower.includes("burgerveg")
   );
   const isSalsa = SALSE.has(lower);
-  const isSide = !isPanino && !isSalsa && (
+  const isDolce = !isPanino && !isSalsa && (
+    lower.includes("nutellone") || lower.includes("cookies") || lower.includes("cinnamon")
+  );
+  const isSide = !isPanino && !isSalsa && !isDolce && (
     lower.includes("patatine") || lower.includes("patate") ||
-    lower.includes("tender") || lower.includes("nutellone") ||
-    lower.includes("cookies") || lower.includes("polpette")
+    lower.includes("tender") || lower.includes("polpette")
   );
   const isMenu = MENU_RE.test(text);
   const sideChoice: "normali" | "dolci" | undefined =
@@ -136,7 +138,7 @@ export function parseItem(raw: string): ParsedItem {
   const formatoMatch = lower.match(FORMATO_RE);
   const formato = formatoMatch ? formatoMatch[1].toLowerCase() : undefined;
 
-  return { rawName, qty, isPanino, isMenu, isSalsa, isSide, drink, sideChoice, extras, swaps, removed, formato };
+  return { rawName, qty, isPanino, isMenu, isSalsa, isSide, isDolce, drink, sideChoice, extras, swaps, removed, formato };
 }
 
 /* ─────────────────────────────── VALIDITÀ ────────────────────────────────── */
@@ -192,6 +194,7 @@ export interface Analytics {
   topSalse: RankedItem[];
   topBibite: RankedItem[];
   topSides: RankedItem[];
+  topDolci: RankedItem[];
 
   // Patatine (solo menu)
   menuTot: number;            // ordini-menu totali
@@ -243,6 +246,7 @@ function aggregateOrders(orders: Order[]) {
   const salse   = new Map<string, number>();
   const bibite  = new Map<string, number>();
   const sides   = new Map<string, number>();
+  const dolci   = new Map<string, number>();
   const slots   = new Map<number, number>();
   const dowFat  = new Map<number, number>();
   const dowOrd  = new Map<number, number>();
@@ -281,7 +285,8 @@ function aggregateOrders(orders: Order[]) {
         for (const ex of p.extras) extras.set(ex, (extras.get(ex) ?? 0) + n);
       }
       if (p.isSalsa) salse.set(p.rawName, (salse.get(p.rawName) ?? 0) + n);
-      if (p.isSide) sides.set(p.rawName, (sides.get(p.rawName) ?? 0) + n);
+      if (p.isSide)  sides.set(p.rawName, (sides.get(p.rawName) ?? 0) + n);
+      if (p.isDolce) dolci.set(p.rawName, (dolci.get(p.rawName) ?? 0) + n);
       // Extra da items non-panino (es. "+ bacon" standalone — raro ma possibile)
       for (const ex of p.extras) extras.set(ex, (extras.get(ex) ?? 0) + n);
     }
@@ -289,7 +294,7 @@ function aggregateOrders(orders: Order[]) {
   }
 
   return { fatturato, ordini, scontrinoMedio, menuOrdini, menuTot, pateDolci,
-           panini, extras, salse, bibite, sides, slots, dowFat, dowOrd, dayFat, dayOrd };
+           panini, extras, salse, bibite, sides, dolci, slots, dowFat, dowOrd, dayFat, dayOrd };
 }
 
 export function computeAnalytics(
@@ -374,6 +379,7 @@ export function computeAnalytics(
     topSalse:  ranked(cur.salse,  cur.ordini),
     topBibite: ranked(cur.bibite, cur.ordini),
     topSides:  ranked(cur.sides,  cur.ordini),
+    topDolci:  ranked(cur.dolci,  cur.ordini),
 
     menuTot:        cur.menuTot,
     pateDolciCount: cur.pateDolci,
