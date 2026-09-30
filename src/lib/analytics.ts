@@ -191,6 +191,7 @@ export interface Analytics {
   topExtras: RankedItem[];
   topSalse: RankedItem[];
   topBibite: RankedItem[];
+  topSides: RankedItem[];
 
   // Patatine (solo menu)
   menuTot: number;            // ordini-menu totali
@@ -241,6 +242,7 @@ function aggregateOrders(orders: Order[]) {
   const extras  = new Map<string, number>();
   const salse   = new Map<string, number>();
   const bibite  = new Map<string, number>();
+  const sides   = new Map<string, number>();
   const slots   = new Map<number, number>();
   const dowFat  = new Map<number, number>();
   const dowOrd  = new Map<number, number>();
@@ -279,6 +281,7 @@ function aggregateOrders(orders: Order[]) {
         for (const ex of p.extras) extras.set(ex, (extras.get(ex) ?? 0) + n);
       }
       if (p.isSalsa) salse.set(p.rawName, (salse.get(p.rawName) ?? 0) + n);
+      if (p.isSide) sides.set(p.rawName, (sides.get(p.rawName) ?? 0) + n);
       // Extra da items non-panino (es. "+ bacon" standalone — raro ma possibile)
       for (const ex of p.extras) extras.set(ex, (extras.get(ex) ?? 0) + n);
     }
@@ -286,7 +289,7 @@ function aggregateOrders(orders: Order[]) {
   }
 
   return { fatturato, ordini, scontrinoMedio, menuOrdini, menuTot, pateDolci,
-           panini, extras, salse, bibite, slots, dowFat, dowOrd, dayFat, dayOrd };
+           panini, extras, salse, bibite, sides, slots, dowFat, dowOrd, dayFat, dayOrd };
 }
 
 export function computeAnalytics(
@@ -370,6 +373,7 @@ export function computeAnalytics(
     topExtras: ranked(cur.extras, cur.ordini),
     topSalse:  ranked(cur.salse,  cur.ordini),
     topBibite: ranked(cur.bibite, cur.ordini),
+    topSides:  ranked(cur.sides,  cur.ordini),
 
     menuTot:        cur.menuTot,
     pateDolciCount: cur.pateDolci,

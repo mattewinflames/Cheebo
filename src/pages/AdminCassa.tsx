@@ -1370,7 +1370,7 @@ function StatisticheSection() {
   const dateInp: React.CSSProperties = { ...inp, padding: "8px 10px", fontSize: 13 };
   const maxFat    = Math.max(...stats.trend.map(d => d.fat), 1);
   const maxSlot   = Math.max(...stats.slotRitiro.map(s => s.count), 1);
-  const [addOnTab, setAddOnTab] = useState<"extra" | "salse" | "bibite">("extra");
+  const [addOnTab, setAddOnTab] = useState<"extra" | "salse" | "bibite" | "sides">("extra");
   const [tooltip, setTooltip] = useState<{ day: typeof stats.trend[0]; x: number; y: number } | null>(null);
   const [dowTip,  setDowTip]  = useState<typeof stats.byDow[0] | null>(null);
 
@@ -1487,19 +1487,21 @@ function StatisticheSection() {
 
         <div className="stats-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
           {(() => {
-            type AddOnTab = "extra" | "salse" | "bibite";
+            type AddOnTab = "extra" | "salse" | "bibite" | "sides";
             const tabItems: Record<AddOnTab, { name: string; qty: number; pct: number }[]> = {
               extra:  stats.topExtras,
               salse:  stats.topSalse,
               bibite: stats.topBibite,
+              sides:  stats.topSides,
             };
             const tabColor: Record<AddOnTab, string> = {
-              extra: "#10b981", salse: "#8b5cf6", bibite: "#0ea5e9",
+              extra: "#10b981", salse: "#8b5cf6", bibite: "#0ea5e9", sides: C.amber,
             };
             const tabs: { id: AddOnTab; label: string }[] = [
               { id: "extra",  label: "Extra" },
               { id: "salse",  label: "Salse" },
               { id: "bibite", label: "Bibite" },
+              { id: "sides",  label: "Sides" },
             ];
             return (
               <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
