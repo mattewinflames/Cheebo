@@ -5,20 +5,6 @@ import {
 import { db } from "./firebase";
 import type { MenuItem } from "./menu";
 
-const MENU_CACHE_KEY = "cheebo_menu_cache";
-
-/** Legge il menu dalla cache localStorage (caricamento istantaneo al primo render). */
-export function getCachedMenu(): MenuItem[] {
-  try {
-    const raw = localStorage.getItem(MENU_CACHE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function setCachedMenu(items: MenuItem[]): void {
-  try { localStorage.setItem(MENU_CACHE_KEY, JSON.stringify(items)); } catch { /* ignora */ }
-}
-
 export function subscribeMenu(
   cb: (items: MenuItem[]) => void,
   onlyActive = false,
@@ -38,9 +24,7 @@ export function subscribeMenu(
       q,
       (snap) => {
         retries = 0;
-        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
-        setCachedMenu(items); // aggiorna la cache
-        cb(items);
+        cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[]);
       },
       (err) => {
         console.error("[subscribeMenu] errore:", err);
