@@ -21,12 +21,12 @@ export const WINDOW_MIN = 10;
  * tenendo conto delle regole di overflow:
  * - se usati < CAP: spazio normale fino a CAP
  * - se usati >= CAP: piena, nessuno spazio
- * - se usati > OVERFLOW_THRESHOLD e < CAP: overflow consentito fino a min(CAP_OVERFLOW, usati+5)
- * - se usati <= OVERFLOW_THRESHOLD: overflow libero fino a CAP_OVERFLOW
+ * - se usati >= OVERFLOW_THRESHOLD e < CAP: overflow consentito fino a min(CAP_OVERFLOW, usati+5)
+ * - se usati < OVERFLOW_THRESHOLD: overflow libero fino a CAP_OVERFLOW
  */
 export function windowCapacity(used: number, orderSize: number): number {
   if (used >= CAP) return 0;                          // piena — nessun overflow
-  if (used > OVERFLOW_THRESHOLD) {
+  if (used >= OVERFLOW_THRESHOLD) {
     // zona parzialmente occupata: overflow solo se ordine ≤ 5 patty e non supera CAP_OVERFLOW
     const canAdd = Math.min(5, CAP_OVERFLOW - used);
     return orderSize <= 5 ? canAdd : 0;
