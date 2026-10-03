@@ -5,12 +5,44 @@ import {
 import { db } from "./firebase";
 import type { MenuItem } from "./menu";
 
-export function subscribeMenu(cb: (items: MenuItem[]) => void, onlyActive = false): () => void {
+export function subscribeMenu(
+  cb: (items: MenuItem[]) => void,
+  onlyActive = false,
+  onError?: (e: Error) => void,
+): () => void {
   const base = collection(db, "menu");
   const q = onlyActive
     ? query(base, where("active", "==", true), orderBy("order", "asc"))
     : query(base, orderBy("order", "asc"));
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[]));
+
+  let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+  let unsub: (() => void) | null = null;
+  let retries = 0;
+
+  const subscribe = () => {
+    unsub = onSnapshot(
+      q,
+      (snap) => {
+        retries = 0; // reset al primo successo
+        cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[]);
+      },
+      (err) => {
+        console.error("[subscribeMenu] errore:", err);
+        onError?.(err);
+        // Retry esponenziale: 2s, 4s, 8s, max 30s
+        const delay = Math.min(2000 * Math.pow(2, retries), 30000);
+        retries++;
+        retryTimeout = setTimeout(subscribe, delay);
+      },
+    );
+  };
+
+  subscribe();
+
+  return () => {
+    if (retryTimeout) clearTimeout(retryTimeout);
+    unsub?.();
+  };
 }
 
 export async function saveItem(item: MenuItem): Promise<void> {

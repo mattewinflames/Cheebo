@@ -24,6 +24,7 @@ type Choice = "first" | { window: number; readyMin: number } | null;
 export default function Prenotazioni() {
   const [step, setStep] = useState<"menu" | "quando" | "conferma" | "pagamento" | "done">("menu");
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [menuErr, setMenuErr] = useState(false);
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [name, setName] = useState("");
   const [accettaTermini, setAccettaTermini] = useState(false);
@@ -47,7 +48,7 @@ export default function Prenotazioni() {
   const session = sessions.find((s) => s.serviceKey === sessionKey);
   const service: Service | null = session ? { startMin: session.startMin, endMin: session.endMin, label: session.label } : null;
 
-  useEffect(() => subscribeMenu(setMenu, true), []);
+  useEffect(() => subscribeMenu(setMenu, true, () => setMenuErr(true)), []);
   useEffect(() => subscribeSettings(setSettings), []);
 
   // Blocco prenotazioni durante l'orario di apertura (per-dow, per-servizio)
@@ -251,7 +252,17 @@ export default function Prenotazioni() {
 
             <Ghost t="Burgers" />
             {menu.filter((m) => m.type === "burger" && !m.special && (m.limitedStock == null || (stock?.[`limited_${m.id}`] ?? m.limitedStock) > 0)).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
-            {menu.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: "16px 0" }}>Caricamento menu…</div>}
+            {menu.length === 0 && !menuErr && <div style={{ color: C.muted, fontSize: 13, padding: "16px 0" }}>Caricamento menu…</div>}
+            {menu.length === 0 && menuErr && (
+              <div style={{ padding: "16px 0", display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
+                <div style={{ color: C.redline, fontSize: 13 }}>Impossibile caricare il menu. Controlla la connessione.</div>
+                <button
+                  onClick={() => { setMenuErr(false); }}
+                  style={{ fontSize: 13, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                  Riprova
+                </button>
+              </div>
+            )}
             {(["side", "salsa", "dolce", "drink"] as const).map((t) => {
               const items = menu.filter((m) => m.type === t && (m.limitedStock == null || (stock?.[`limited_${m.id}`] ?? m.limitedStock) > 0));
               if (items.length === 0) return null;
