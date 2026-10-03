@@ -7,7 +7,7 @@ import {
   type FormatId, type CartType, type CartLine, type MenuItem, type PaninoConfig, type CartReq,
 } from "../lib/menu";
 import { totalWindows, planFirst, planAt, firstFeasibleWindow, windowEndMin, windowCapacity, fmt, type Service } from "../lib/dispatch";
-import { subscribeMenu } from "../lib/menuStore";
+import { subscribeMenu, getCachedMenu } from "../lib/menuStore";
 import { subscribeSettings, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
 import { submitBooking, startCheckout, subscribeLedger, PAY_ENABLED, PAY_DEFAULT, type BookingMode, type PayMethod } from "../lib/orders";
 import { buildConfirmMessage, waLink } from "../lib/whatsapp";
@@ -23,7 +23,7 @@ type Choice = "first" | { window: number; readyMin: number } | null;
 
 export default function Prenotazioni() {
   const [step, setStep] = useState<"menu" | "quando" | "conferma" | "pagamento" | "done">("menu");
-  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [menu, setMenu] = useState<MenuItem[]>(() => getCachedMenu());
   const [menuErr, setMenuErr] = useState(false);
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [name, setName] = useState("");

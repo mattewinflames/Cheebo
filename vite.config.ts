@@ -8,9 +8,21 @@ export default defineConfig({
     host: true,          // ascolta anche in rete (equivale a --host)
     allowedHosts: true,  // accetta gli host dei tunnel (loca.lt, trycloudflare, ecc.)
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Firebase in chunk separato — cambia raramente, resta in cache
+          "firebase": ["firebase/app", "firebase/firestore", "firebase/app-check", "firebase/auth"],
+          // React + router in chunk separato
+          "react-vendor": ["react", "react-dom", "react-router-dom"],
+        },
+      },
+    },
+    // Soglia warning chunk aumentata (AdminCassa è grande by design)
+    chunkSizeWarningLimit: 800,
+  },
   test: {
-    // solo i test unitari: quelli delle regole stanno in tests/ e richiedono
-    // l'emulatore Firestore, quindi si lanciano a parte con `test:rules`
     include: ["src/**/*.test.ts"],
   },
 });

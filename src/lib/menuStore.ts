@@ -5,6 +5,20 @@ import {
 import { db } from "./firebase";
 import type { MenuItem } from "./menu";
 
+const MENU_CACHE_KEY = "cheebo_menu_cache";
+
+/** Legge il menu dalla cache localStorage (caricamento istantaneo al primo render). */
+export function getCachedMenu(): MenuItem[] {
+  try {
+    const raw = localStorage.getItem(MENU_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function setCachedMenu(items: MenuItem[]): void {
+  try { localStorage.setItem(MENU_CACHE_KEY, JSON.stringify(items)); } catch { /* ignora */ }
+}
+
 export function subscribeMenu(
   cb: (items: MenuItem[]) => void,
   onlyActive = false,
@@ -23,13 +37,15 @@ export function subscribeMenu(
     unsub = onSnapshot(
       q,
       (snap) => {
-        retries = 0; // reset al primo successo
-        cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[]);
+        retries = 0;
+        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MenuItem[];
+        setCachedMenu(items); // aggiorna la cache
+        cb(items);
       },
       (err) => {
         console.error("[subscribeMenu] errore:", err);
         onError?.(err);
-        // Retry esponenziale: 2s, 4s, 8s, max 30s
+        // Retry esponenziale: 2s, 4s, 8s… max 30s
         const delay = Math.min(2000 * Math.pow(2, retries), 30000);
         retries++;
         retryTimeout = setTimeout(subscribe, delay);
@@ -52,9 +68,11 @@ export async function saveItem(item: MenuItem): Promise<void> {
   if (payload["limitedStock"] == null) payload["limitedStock"] = deleteField();
   await setDoc(doc(db, "menu", id), payload, { merge: true });
 }
+
 export async function setActive(id: string, active: boolean): Promise<void> {
   await updateDoc(doc(db, "menu", id), { active, updatedAt: serverTimestamp() });
 }
+
 export async function removeItem(id: string): Promise<void> {
   await deleteDoc(doc(db, "menu", id));
 }
