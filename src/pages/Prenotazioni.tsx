@@ -255,7 +255,7 @@ export default function Prenotazioni() {
             {menu.length === 0 && !menuErr && <div style={{ color: C.muted, fontSize: 13, padding: "16px 0" }}>Caricamento menu…</div>}
             {menu.length === 0 && menuErr && (
               <div style={{ padding: "16px 0", display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-                <div style={{ color: C.redline, fontSize: 13 }}>Impossibile caricare il menu. Controlla la connessione.</div>
+                <div style={{ color: C.red, fontSize: 13 }}>Impossibile caricare il menu. Controlla la connessione.</div>
                 <button
                   onClick={() => { setMenuErr(false); }}
                   style={{ fontSize: 13, color: C.blue, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
