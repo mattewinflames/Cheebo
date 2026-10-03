@@ -248,10 +248,10 @@ export default function Prenotazioni() {
               </div>
             )}
             <Ghost t="Smashburgers" />
-            {menu.filter((m) => m.type === "smash" && !m.special && (m.limitedStock == null || (stock?.[`limited_${m.id}`] ?? m.limitedStock) > 0)).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
+            {menu.filter((m) => m.type === "smash" && !m.special).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} esaurito={b.limitedStock != null && (stock?.[`limited_${b.id}`] ?? b.limitedStock) <= 0} />)}
 
             <Ghost t="Burgers" />
-            {menu.filter((m) => m.type === "burger" && !m.special && (m.limitedStock == null || (stock?.[`limited_${m.id}`] ?? m.limitedStock) > 0)).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} />)}
+            {menu.filter((m) => m.type === "burger" && !m.special).map((b) => <BurgerCard key={b.id} item={b} drinks={drinks} cart={cart} onAdd={setQty} esaurito={b.limitedStock != null && (stock?.[`limited_${b.id}`] ?? b.limitedStock) <= 0} />)}
             {menu.length === 0 && !menuErr && <div style={{ color: C.muted, fontSize: 13, padding: "16px 0" }}>Caricamento menu…</div>}
             {menu.length === 0 && menuErr && (
               <div style={{ padding: "16px 0", display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
@@ -264,13 +264,13 @@ export default function Prenotazioni() {
               </div>
             )}
             {(["side", "salsa", "dolce", "drink"] as const).map((t) => {
-              const items = menu.filter((m) => m.type === t && (m.limitedStock == null || (stock?.[`limited_${m.id}`] ?? m.limitedStock) > 0));
+              const items = menu.filter((m) => m.type === t);
               if (items.length === 0) return null;
               const title = t === "side" ? "Sides" : t === "salsa" ? "Salse" : t === "dolce" ? "Dolci" : "Drinks";
               return (
                 <div key={t}>
                   <Ghost t={title} />
-                  {items.map((b) => <SimpleRow key={b.id} item={{ name: b.name, price: b.price ?? 0 }} qty={cart[b.id]?.qty || 0} onAdd={() => bump(b.id, { key: b.id, label: b.name, price: b.price ?? 0, patty: 0, req: { kind: "simple", itemId: b.id } }, 1)} onSub={() => bump(b.id, { key: b.id, label: b.name, price: b.price ?? 0, patty: 0, req: { kind: "simple", itemId: b.id } }, -1)} />)}
+                  {items.map((b) => { const esaurito = b.limitedStock != null && (stock?.[`limited_${b.id}`] ?? b.limitedStock) <= 0; return <SimpleRow key={b.id} item={{ name: b.name, price: b.price ?? 0 }} qty={cart[b.id]?.qty || 0} esaurito={esaurito} onAdd={esaurito ? () => {} : () => bump(b.id, { key: b.id, label: b.name, price: b.price ?? 0, patty: 0, req: { kind: "simple", itemId: b.id } }, 1)} onSub={() => bump(b.id, { key: b.id, label: b.name, price: b.price ?? 0, patty: 0, req: { kind: "simple", itemId: b.id } }, -1)} />; })}
                 </div>
               );
             })}
@@ -698,13 +698,12 @@ function SpecialsGroup({ items, cart, onAdd, sessionLabel }: {
   );
 }
 
-function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty }: {
+function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty, esaurito }: {
   item: MenuItem; drinks: MenuItem[]; cart: Record<string, CartLine>;
   onAdd: (k: string, d: Omit<CartLine, "qty">, q: number) => void;
-  /** dentro la card special: niente bordo, il contenitore ha già il suo */
   bare?: boolean;
-  /** tetto alla quantità: i pezzi ancora disponibili di uno special */
   maxQty?: number;
+  esaurito?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [fmtId, setFmtId] = useState<FormatId>("singolo");
@@ -769,7 +768,7 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty }: {
   };
   return (
     <div style={bare ? undefined : { borderBottom: `1px solid ${C.line}` }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ width: "100%", background: "none", border: "none", textAlign: "left", padding: bare ? "0 0 2px" : "14px 0", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+      <button onClick={esaurito ? undefined : () => setOpen((o) => !o)} style={{ width: "100%", background: "none", border: "none", textAlign: "left", padding: bare ? "0 0 2px" : "14px 0", cursor: esaurito ? "default" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, opacity: esaurito ? 0.45 : 1 }}>
         <div style={{ minWidth: 0 }}>
           <span style={{ fontWeight: 700, fontSize: 15, display: "inline-flex", alignItems: "center", gap: 6 }}>{item.name}{item.veg && <Leaf size={13} color={C.veg} />}{inCart > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: C.blue, borderRadius: 20, padding: "1px 7px" }}>{inCart}</span>}</span>
           <div style={{ fontSize: 12, color: C.muted, margin: "3px 0 0", lineHeight: 1.4 }}>{item.desc}</div>
@@ -777,7 +776,12 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty }: {
         </div>
         <span style={{ width: 34, height: 34, borderRadius: "50%", border: `1.6px solid ${C.blue}`, color: open ? "#fff" : C.blue, background: open ? C.blue : "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1, flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .2s" }}>+</span>
       </button>
-      {open && createPortal(
+      {esaurito && (
+        <div style={{ marginTop: -10, marginBottom: 8, paddingLeft: 2 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, background: C.bg, border: `1px solid ${C.line}`, borderRadius: 20, padding: "2px 9px" }}>Esaurito</span>
+        </div>
+      )}
+      {open && !esaurito && createPortal(
         <>
           <div className="cb-scrim" onClick={() => setOpen(false)} />
           <div className="cb-panel" role="dialog" aria-modal="true" aria-label={item.name}>
@@ -912,11 +916,18 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty }: {
   );
 }
 
-function SimpleRow({ item, qty, onAdd, onSub }: { item: { name: string; price: number }; qty: number; onAdd: () => void; onSub: () => void }) {
+function SimpleRow({ item, qty, onAdd, onSub, esaurito }: { item: { name: string; price: number }; qty: number; onAdd: () => void; onSub: () => void; esaurito?: boolean }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 0", borderBottom: `1px solid ${C.line}` }}>
-      <div><span style={{ fontWeight: 600, fontSize: 14.5 }}>{item.name}</span><div style={{ fontSize: 13, color: C.blue, fontWeight: 600, marginTop: 3 }}>{euro(item.price)}</div></div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>{qty > 0 && <button onClick={onSub} style={rnd}>−</button>}{qty > 0 && <span style={{ width: 14, textAlign: "center", fontWeight: 700 }}>{qty}</span>}<button onClick={onAdd} style={{ ...rnd, background: C.blue, borderColor: C.blue, color: "#fff" }}>+</button></div>
+    <div style={{ borderBottom: `1px solid ${C.line}`, paddingBottom: esaurito ? 10 : 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 0 6px", opacity: esaurito ? 0.45 : 1 }}>
+        <div><span style={{ fontWeight: 600, fontSize: 14.5 }}>{item.name}</span><div style={{ fontSize: 13, color: C.blue, fontWeight: 600, marginTop: 3 }}>{euro(item.price)}</div></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {!esaurito && qty > 0 && <button onClick={onSub} style={rnd}>−</button>}
+          {!esaurito && qty > 0 && <span style={{ width: 14, textAlign: "center", fontWeight: 700 }}>{qty}</span>}
+          <button onClick={esaurito ? undefined : onAdd} disabled={esaurito} style={{ ...rnd, background: esaurito ? C.surface : C.blue, borderColor: esaurito ? C.line : C.blue, color: esaurito ? C.muted : "#fff", cursor: esaurito ? "default" : "pointer" }}>+</button>
+        </div>
+      </div>
+      {esaurito && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, background: C.bg, border: `1px solid ${C.line}`, borderRadius: 20, padding: "2px 9px", marginBottom: 4, display: "inline-block" }}>Esaurito</span>}
     </div>
   );
 }
