@@ -50,11 +50,13 @@ function toASCII(text: string): string {
 
 // Mappa prefisso nome → categoria comanda (ordine di stampa)
 // La chiave è il prefisso lowercase dell'item (prima del " ·" o " +")
-const CATEGORIA_ORDER = ["BURGER", "SMASHBURGER", "SIDES", "SALSE", "DOLCI", "DRINKS"] as const;
+// SPECIAL è sempre la prima sezione e compare solo se l'ordine contiene specials.
+const CATEGORIA_ORDER = ["SPECIAL", "BURGER", "SMASHBURGER", "SIDES", "SALSE", "DOLCI", "DRINKS"] as const;
 type Categoria = typeof CATEGORIA_ORDER[number];
 
-function categoriaItem(nome: string): Categoria {
+function categoriaItem(nome: string, specialNames: Set<string>): Categoria {
   const n = nome.toLowerCase().replace(/^\d+[×x]\s*/, "").trim();
+  if (specialNames.has(n)) return "SPECIAL";
   if (n.startsWith("classic") || n.startsWith("oklahoma") || n.startsWith("crispy") || n.startsWith("smash veg")) return "SMASHBURGER";
   if (n.startsWith("chicken") || n.startsWith("pulled pork") || n.startsWith("burgerveg")) return "BURGER";
   if (n.startsWith("tender") || n.startsWith("patatine") || n.startsWith("polpette") || n.startsWith("box patatine")) return "SIDES";
@@ -149,6 +151,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     code?: number; name: string; phone?: string; readyMin: number;
     items: string[]; total: number; serviceCharge?: number; pay: string;
     serviceKey?: string; createdAt?: { toDate?: () => Date };
+    /** mappa itemId → qty degli special presenti nell'ordine */
+    specials?: Record<string, number>;
   };
 
   // Data servizio: "2026-09-05-Cena" → "5-set-2026"
@@ -168,13 +172,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return d.toLocaleTimeString("it-IT", { timeZone: "Europe/Rome", hour: "2-digit", minute: "2-digit", hour12: false }).replace(":", ".");
   })();
 
+  // Nomi (lowercase) degli special presenti nell'ordine — usati per la classificazione.
+  // Il campo `specials` è la mappa itemId→qty salvata da create-booking; i nomi
+  // non sono direttamente in quella mappa, quindi li ricaviamo cercando il label
+  // corrispondente negli items: uno special ha label === item.name (senza formato).
+  // Per sicurezza, includiamo anche i nomi ricavati dagli item stessi che abbiano
+  // un id corrispondente a una chiave di specials.
+  const specialIds = new Set(Object.keys(o.specials ?? {}));
+  // Costruiamo il set dei nomi lowercase degli special confrontando ogni item stringa
+  // con gli id degli special: un item è special se il suo nome (prima di " ·" o " +")
+  // corrisponde esattamente a uno special id (case-insensitive, con toASCII).
+  const specialNames = new Set<string>(
+    o.items
+      .map(raw => {
+        const parsed = parseItem(raw);
+        return specialIds.has(parsed.nome.toLowerCase().replace(/\s+/g, "-"))
+          || [...specialIds].some(id => toASCII(id).toLowerCase().replace(/-/g, " ") === parsed.nome.toLowerCase())
+          ? parsed.nome.toLowerCase()
+          : null;
+      })
+      .filter((n): n is string => n !== null)
+  );
+
   // Raggruppa items per categoria
   const gruppi = new Map<Categoria, { qty: number; nome: string; menu: string | null; extras: string[]; rimozioni: string[] }[]>();
   for (const cat of CATEGORIA_ORDER) gruppi.set(cat, []);
 
   for (const raw of o.items) {
     const parsed = parseItem(raw);
-    const cat = categoriaItem(parsed.nome);
+    const cat = categoriaItem(parsed.nome, specialNames);
     gruppi.get(cat)!.push(parsed);
   }
 
