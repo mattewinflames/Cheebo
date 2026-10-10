@@ -921,7 +921,13 @@ function OrdiniSection() {
     setPrintStatus("Generando comanda…");
     try {
       const r = await fetch(`/api/comanda-txt?order_id=${encodeURIComponent(o.id)}`);
-      if (!r.ok) { setPrintStatus("Errore generazione"); alert("Errore generazione comanda"); return; }
+      if (!r.ok) {
+        const errBody = await r.text().catch(() => "");
+        await logBLE("error", `comanda-txt HTTP ${r.status} — ordine ${o.id}`, { detail: errBody });
+        setPrintStatus("Errore generazione");
+        alert(`Errore generazione comanda (HTTP ${r.status})`);
+        return;
+      }
       const text = await r.text();
 
       if (bluetoothSupported()) {
