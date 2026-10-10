@@ -8,7 +8,9 @@
    ========================================================================== */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb } from "./_lib/admin.js";
-import { ORDERS, MENU } from "./_lib/holds.js";
+import { ORDERS } from "./_lib/holds.js";
+
+const MENU_COLLECTION = "menu";
 
 const W = 32;
 
@@ -158,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // silenziosamente a Set vuoto (la comanda esce uguale, senza sezione SPECIAL).
   let specialNames = new Set<string>();
   try {
-    const menuSnap = await adminDb.collection(MENU).where("special", "!=", null).get();
+    const menuSnap = await adminDb.collection(MENU_COLLECTION).where("special", "!=", null).get();
     specialNames = new Set<string>(
       menuSnap.docs.map(d => ((d.data().name as string) ?? "").toLowerCase()).filter(Boolean)
     );
