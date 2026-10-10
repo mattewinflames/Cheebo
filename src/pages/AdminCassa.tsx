@@ -80,7 +80,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
             : tab === "incassi" ? <IncassiSection />
             : tab === "menu" ? <MenuSection />
             : tab === "stats" ? <StatisticheSection />
-            : tab === "opzioni" ? <OpzioniSection settings={settings} />
+            : tab === "opzioni" ? <OpzioniSection settings={settings} activeServiceKey={resolveService()?.serviceKey ?? ""} />
             : <OrdiniSection />}
           </div>
         </div>
@@ -132,12 +132,43 @@ function labelGruppo(g: { start: string; end: string }): string {
   return `${sameYear ? short(g.start) : full(g.start)} – ${full(g.end)}`;
 }
 
-function OpzioniSection({ settings }: { settings: AppSettings }) {
+function OpzioniSection({ settings, activeServiceKey }: { settings: AppSettings; activeServiceKey: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [nuovaData, setNuovaData] = useState("");
   const [dal, setDal] = useState("");
   const [al, setAl] = useState("");
+
+  // Riconcilia ledger
+  const [reconcileKey, setReconcileKey] = useState(activeServiceKey);
+  const [reconcileBusy, setReconcileBusy] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState<{ before: number; after: number; delta: number; holdsProcessed: number } | null>(null);
+  const [reconcileErr, setReconcileErr] = useState<string | null>(null);
+  const [reconcileConfirm, setReconcileConfirm] = useState(false);
+
+  const doReconcile = async () => {
+    setReconcileBusy(true);
+    setReconcileResult(null);
+    setReconcileErr(null);
+    setReconcileConfirm(false);
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("Sessione scaduta — effettua di nuovo l'accesso.");
+      const token = await currentUser.getIdToken();
+      const r = await fetch("/api/reconcile-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ serviceKey: reconcileKey }),
+      });
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error ?? r.statusText);
+      setReconcileResult(json);
+    } catch (e) {
+      setReconcileErr((e as Error).message ?? "Errore sconosciuto");
+    } finally {
+      setReconcileBusy(false);
+    }
+  };
 
   const toggle = async (patch: Partial<AppSettings>) => {
     setBusy(true); setErr(null);
@@ -294,6 +325,57 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
           </div>
         ) : (
           <div style={{ fontSize: 12.5, color: C.muted, marginTop: 16 }}>Nessun giorno di chiusura impostato.</div>
+        )}
+      </div>
+
+      {/* Riconcilia piastra */}
+      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
+        <div style={{ fontWeight: 700, fontSize: 15 }}>Riconcilia piastra</div>
+        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45, marginBottom: 12 }}>
+          Rimuove i patty fantasma dal registro piastra ricalcolando il ledger dagli ordini pagati.
+          Usare solo a sessione ferma o tra un servizio e l'altro.
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+          <input
+            value={reconcileKey}
+            onChange={(e) => { setReconcileKey(e.target.value); setReconcileResult(null); setReconcileErr(null); setReconcileConfirm(false); }}
+            placeholder="es. 2026-10-11-Cena"
+            style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: reconcileBusy ? C.bg : "#fff", fontFamily: "JetBrains Mono, monospace" }}
+          />
+        </div>
+        {reconcileErr && (
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "#FDECE8", border: `1px solid ${C.danger}`, color: C.danger, borderRadius: 10, padding: "9px 12px", fontSize: 13, marginBottom: 10 }}>
+            <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} /> {reconcileErr}
+          </div>
+        )}
+        {reconcileResult && (
+          <div style={{ background: "#EBF7F1", border: "1px solid #7BC9A2", color: "#1E6E47", borderRadius: 10, padding: "9px 12px", fontSize: 13, marginBottom: 10 }}>
+            <Check size={14} style={{ verticalAlign: "middle", marginRight: 6 }} />
+            <strong>Ledger aggiornato.</strong>{" "}
+            Holds pagati: {reconcileResult.holdsProcessed} · Prima: {reconcileResult.before} patty · Dopo: {reconcileResult.after} patty
+            {reconcileResult.delta !== 0 && <> · <strong>Rimossi: {reconcileResult.delta}</strong></>}
+            {reconcileResult.delta === 0 && <> · Già corretto</>}
+          </div>
+        )}
+        {!reconcileConfirm ? (
+          <button
+            disabled={reconcileBusy || !reconcileKey}
+            onClick={() => setReconcileConfirm(true)}
+            style={{ background: reconcileBusy || !reconcileKey ? C.line : C.danger, color: reconcileBusy || !reconcileKey ? C.muted : "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontWeight: 700, fontSize: 13, cursor: reconcileBusy || !reconcileKey ? "default" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            <RotateCcw size={14} /> Riconcilia piastra
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: C.danger, fontWeight: 600 }}>Sovrascrivere il ledger di <em>{reconcileKey}</em>?</span>
+            <button onClick={doReconcile} disabled={reconcileBusy}
+              style={{ background: C.danger, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              {reconcileBusy ? "…" : "Sì, riconcilia"}
+            </button>
+            <button onClick={() => setReconcileConfirm(false)} disabled={reconcileBusy}
+              style={{ background: C.line, color: C.ink, border: "none", borderRadius: 8, padding: "7px 14px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+              Annulla
+            </button>
+          </div>
         )}
       </div>
 

@@ -4,6 +4,7 @@
    Firestore via service account, non tramite Cloud Functions. */
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 
 function initAdmin(): App {
   const existing = getApps();
@@ -17,4 +18,5 @@ function initAdmin(): App {
 }
 
 export const adminDb = getFirestore(initAdmin());
+export const adminAuth = getAuth(initAdmin());
 export { FieldValue, Timestamp };
