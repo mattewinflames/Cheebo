@@ -144,10 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (typeof orderId !== "string" || !orderId)
     return res.status(400).json({ error: "order_id mancante" });
 
-  const [snap, menuSnap] = await Promise.all([
-    adminDb.collection(ORDERS).doc(orderId).get(),
-    adminDb.collection(MENU).where("special", "!=", null).get(),
-  ]);
+  const snap = await adminDb.collection(ORDERS).doc(orderId).get();
   if (!snap.exists) return res.status(404).json({ error: "ordine non trovato" });
 
   const o = snap.data() as {
@@ -157,11 +154,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
 
   // Nomi lowercase di tutti gli item che hanno il campo `special` su Firestore.
-  // Usati per riconoscere gli special nella comanda indipendentemente dal campo
-  // `specials` dell'ordine (che potrebbe mancare su ordini vecchi).
-  const specialNames = new Set<string>(
-    menuSnap.docs.map(d => ((d.data().name as string) ?? "").toLowerCase()).filter(Boolean)
-  );
+  // La query con "!= null" richiede un indice composito; se manca degradiamo
+  // silenziosamente a Set vuoto (la comanda esce uguale, senza sezione SPECIAL).
+  let specialNames = new Set<string>();
+  try {
+    const menuSnap = await adminDb.collection(MENU).where("special", "!=", null).get();
+    specialNames = new Set<string>(
+      menuSnap.docs.map(d => ((d.data().name as string) ?? "").toLowerCase()).filter(Boolean)
+    );
+  } catch {
+    // indice mancante o permessi: nessun blocco, la comanda prosegue normalmente
+  }
 
   // Data servizio: "2026-09-05-Cena" → "5-set-2026"
   const MESI = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
