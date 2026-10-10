@@ -8,9 +8,7 @@
    ========================================================================== */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb } from "./_lib/admin.js";
-import { ORDERS } from "./_lib/holds.js";
-
-const MENU_COLLECTION = "menu";
+import { ORDERS, MENU } from "./_lib/holds.js";
 
 const W = 32;
 
@@ -148,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const [snap, menuSnap] = await Promise.all([
     adminDb.collection(ORDERS).doc(orderId).get(),
-    adminDb.collection(MENU_COLLECTION).where("special", "!=", null).get(),
+    adminDb.collection(MENU).where("special", "!=", null).get(),
   ]);
   if (!snap.exists) return res.status(404).json({ error: "ordine non trovato" });
 
