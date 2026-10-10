@@ -10,6 +10,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb } from "./_lib/admin.js";
 import { ORDERS } from "./_lib/holds.js";
 
+const MENU_COLLECTION = "menu";
+
 const W = 32;
 
 function fmtOra(min: number) {
@@ -50,7 +52,7 @@ function toASCII(text: string): string {
 
 // Mappa prefisso nome → categoria comanda (ordine di stampa)
 // La chiave è il prefisso lowercase dell'item (prima del " ·" o " +")
-// SPECIAL è sempre la prima sezione e compare solo se l'ordine contiene specials.
+// SPECIAL è sempre prima e compare solo se l'ordine contiene almeno uno special.
 const CATEGORIA_ORDER = ["SPECIAL", "BURGER", "SMASHBURGER", "SIDES", "SALSE", "DOLCI", "DRINKS"] as const;
 type Categoria = typeof CATEGORIA_ORDER[number];
 
@@ -144,16 +146,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (typeof orderId !== "string" || !orderId)
     return res.status(400).json({ error: "order_id mancante" });
 
-  const snap = await adminDb.collection(ORDERS).doc(orderId).get();
+  const [snap, menuSnap] = await Promise.all([
+    adminDb.collection(ORDERS).doc(orderId).get(),
+    adminDb.collection(MENU_COLLECTION).where("special", "!=", null).get(),
+  ]);
   if (!snap.exists) return res.status(404).json({ error: "ordine non trovato" });
 
   const o = snap.data() as {
     code?: number; name: string; phone?: string; readyMin: number;
     items: string[]; total: number; serviceCharge?: number; pay: string;
     serviceKey?: string; createdAt?: { toDate?: () => Date };
-    /** mappa itemId → qty degli special presenti nell'ordine */
-    specials?: Record<string, number>;
   };
+
+  // Nomi lowercase di tutti gli item che hanno il campo `special` su Firestore.
+  // Usati per riconoscere gli special nella comanda indipendentemente dal campo
+  // `specials` dell'ordine (che potrebbe mancare su ordini vecchi).
+  const specialNames = new Set<string>(
+    menuSnap.docs.map(d => ((d.data().name as string) ?? "").toLowerCase()).filter(Boolean)
+  );
 
   // Data servizio: "2026-09-05-Cena" → "5-set-2026"
   const MESI = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
@@ -171,28 +181,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!d) return "";
     return d.toLocaleTimeString("it-IT", { timeZone: "Europe/Rome", hour: "2-digit", minute: "2-digit", hour12: false }).replace(":", ".");
   })();
-
-  // Nomi (lowercase) degli special presenti nell'ordine — usati per la classificazione.
-  // Il campo `specials` è la mappa itemId→qty salvata da create-booking; i nomi
-  // non sono direttamente in quella mappa, quindi li ricaviamo cercando il label
-  // corrispondente negli items: uno special ha label === item.name (senza formato).
-  // Per sicurezza, includiamo anche i nomi ricavati dagli item stessi che abbiano
-  // un id corrispondente a una chiave di specials.
-  const specialIds = new Set(Object.keys(o.specials ?? {}));
-  // Costruiamo il set dei nomi lowercase degli special confrontando ogni item stringa
-  // con gli id degli special: un item è special se il suo nome (prima di " ·" o " +")
-  // corrisponde esattamente a uno special id (case-insensitive, con toASCII).
-  const specialNames = new Set<string>(
-    o.items
-      .map(raw => {
-        const parsed = parseItem(raw);
-        return specialIds.has(parsed.nome.toLowerCase().replace(/\s+/g, "-"))
-          || [...specialIds].some(id => toASCII(id).toLowerCase().replace(/-/g, " ") === parsed.nome.toLowerCase())
-          ? parsed.nome.toLowerCase()
-          : null;
-      })
-      .filter((n): n is string => n !== null)
-  );
 
   // Raggruppa items per categoria
   const gruppi = new Map<Categoria, { qty: number; nome: string; menu: string | null; extras: string[]; rimozioni: string[] }[]>();
