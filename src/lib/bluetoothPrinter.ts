@@ -56,6 +56,11 @@ async function writeChunked(
   const writePromise = (async () => {
     for (let i = 0; i < data.length; i += CHUNK_SIZE) {
       const chunk = data.slice(i, i + CHUNK_SIZE);
+      // char.properties può essere null se la caratteristica è stata invalidata
+      // dopo una disconnessione — in quel caso trattiamo come errore di disconnessione
+      if (!char.properties) {
+        throw new Error("GATT Server is disconnected. (properties null — char stale)");
+      }
       if (char.properties.writeWithoutResponse) {
         await char.writeValueWithoutResponse(chunk);
       } else {
