@@ -13,12 +13,10 @@
    ========================================================================== */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, FieldValue, Timestamp } from "./_lib/admin.js";
-import { HOLDS, SESSIONS } from "./_lib/holds.js";
+import { HOLDS, SESSIONS, STALE_MINUTES } from "./_lib/holds.js";
 import { serviceFromKey } from "../src/lib/schedule.js";
-import { totalWindows, ledgerFromMap, ledgerToMap } from "../src/lib/dispatch.js";
+import { totalWindows, ledgerFromMap, ledgerToMapDense } from "../src/lib/dispatch.js";
 
-/** Minuti oltre i quali un hold in attesa è considerato abbandonato. */
-const STALE_MINUTES = 15;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Vercel invia l'header Authorization: Bearer <CRON_SECRET>
@@ -102,7 +100,7 @@ async function releaseHold(holdId: string): Promise<void> {
 
     tx.set(
       sessRef,
-      { ledger: ledgerToMap(led), stock, updatedAt: FieldValue.serverTimestamp() },
+      { ledger: ledgerToMapDense(led), stock, updatedAt: FieldValue.serverTimestamp() },
       { merge: true },
     );
     tx.update(holdRef, { status: "scaduto", releasedAt: FieldValue.serverTimestamp() });

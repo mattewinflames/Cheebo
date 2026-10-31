@@ -12,10 +12,10 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomUUID } from "crypto";
 import { adminDb, FieldValue, Timestamp } from "./_lib/admin.js";
 import { createHppOrder } from "./_lib/nexi.js";
-import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, type Hold } from "./_lib/holds.js";
+import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, isStaleHold, type Hold } from "./_lib/holds.js";
 import { resolveCart, isResolveError, type BookingReq } from "../src/lib/booking.js";
 import { serviceFromKey, upcomingSessions, minWindowNow } from "../src/lib/schedule.js";
-import { totalWindows, planFirstOpen, planAtOpen, ledgerFromMap, ledgerToMap, WINDOW_MIN, type Placement } from "../src/lib/dispatch.js";
+import { totalWindows, planFirstOpen, planAtOpen, ledgerFromMap, ledgerToMapDense, WINDOW_MIN, type Placement } from "../src/lib/dispatch.js";
 import type { MenuItem } from "../src/lib/menu.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -76,14 +76,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let out: TxOut;
   try {
     out = await adminDb.runTransaction<TxOut>(async (tx) => {
-      const snap = await tx.get(sessRef);
+      const pendingQ = adminDb.collection(HOLDS).where("serviceKey", "==", serviceKey).where("status", "==", "attesa");
+      const [snap, pendingSnap] = await Promise.all([tx.get(sessRef), tx.get(pendingQ)]);
       const data = snap.exists ? snap.data() : undefined;
       const led = ledgerFromMap(data?.ledger as Record<string, number> | undefined, n);
       const stock: Record<string, number> = { ...((data?.stock as Record<string, number> | undefined) ?? {}) };
 
+      /* Autoguarigione: i pagamenti abbandonati (hold in attesa da oltre
+         STALE_MINUTES) si liberano QUI, prima di pianificare, senza aspettare il
+         cron di GitHub Actions (che nella pratica gira ogni qualche ora).
+         Stessa operazione di release-stale-holds: celle e special restituiti,
+         hold marcato "scaduto". Se l'ordine poi fallisce, il rilascio si scrive
+         comunque (flushRelease) — altrimenti hold e registro divergerebbero. */
+      const stale = pendingSnap.docs.filter((d) => isStaleHold(d.get("createdAt")));
+      for (const d of stale) {
+        const h = d.data() as Partial<Hold>;
+        for (const w of h.cells ?? []) if (w >= 0 && w < n) led[w] = Math.max(0, led[w] - 1);
+        for (const [id, qty] of Object.entries(h.specials ?? {})) stock[id] = (stock[id] ?? 0) + qty;
+        tx.update(d.ref, { status: "scaduto", releasedAt: FieldValue.serverTimestamp() });
+      }
+      const flushRelease = () => {
+        if (stale.length && snap.exists)
+          tx.set(sessRef, { ledger: ledgerToMapDense(led), stock, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      };
+      if (stale.length) console.log(`[create-booking] liberati ${stale.length} hold abbandonati su ${serviceKey}`);
+
       for (const [id, qty] of Object.entries(resolved.specials)) {
         const remaining = stock[id] ?? specialBase(id);
-        if (remaining < qty) return { ok: false, status: 409, error: "special esaurito", itemId: id, left: remaining };
+        if (remaining < qty) { flushRelease(); return { ok: false, status: 409, error: "special esaurito", itemId: id, left: remaining }; }
       }
 
       // Validazione scorte limitate silenziose
@@ -94,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const m of limitedItems) limitedQtys[m.id] = (limitedQtys[m.id] ?? 0) + 1;
       for (const [id, qty] of Object.entries(limitedQtys)) {
         const remaining = stock[`limited_${id}`] ?? limitedBase(id);
-        if (remaining < qty) return { ok: false, status: 409, error: "item esaurito", itemId: id, left: remaining };
+        if (remaining < qty) { flushRelease(); return { ok: false, status: 409, error: "item esaurito", itemId: id, left: remaining }; }
       }
 
       let plan: Placement;
@@ -109,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         plan = planFirstOpen(led, resolved.patties, service, minW, blocked);
       }
-      if (!plan.ok) return { ok: false, status: 409, error: "piastra al completo" };
+      if (!plan.ok) { flushRelease(); return { ok: false, status: 409, error: "piastra al completo" }; }
 
       for (const w of plan.cells) led[w] += 1;
       for (const [id, qty] of Object.entries(resolved.specials)) stock[id] = (stock[id] ?? specialBase(id)) - qty;
@@ -119,7 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       tx.set(sessRef, {
         label: service.label ?? "", startMin: service.startMin, endMin: service.endMin,
-        ledger: ledgerToMap(led), stock, updatedAt: FieldValue.serverTimestamp(),
+        ledger: ledgerToMapDense(led), stock, updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
       const hold: Hold = {

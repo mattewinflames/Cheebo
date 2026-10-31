@@ -16,7 +16,7 @@ import { adminDb, FieldValue } from "./_lib/admin.js";
 import { stripe } from "./_lib/stripe.js";
 import { HOLDS, SESSIONS, ORDERS, type Hold } from "./_lib/holds.js";
 import { serviceFromKey } from "../src/lib/schedule.js";
-import { totalWindows, ledgerFromMap, ledgerToMap } from "../src/lib/dispatch.js";
+import { totalWindows, ledgerFromMap, ledgerToMap, ledgerToMapDense } from "../src/lib/dispatch.js";
 
 export const config = { api: { bodyParser: false } };
 
@@ -117,7 +117,7 @@ async function release(session: Stripe.Checkout.Session): Promise<void> {
     for (const w of hold.cells) led[w] = Math.max(0, led[w] - 1);
     for (const [id, qty] of Object.entries(hold.specials ?? {})) stock[id] = (stock[id] ?? 0) + qty;
 
-    tx.set(sessRef, { ledger: ledgerToMap(led), stock, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(sessRef, { ledger: ledgerToMapDense(led), stock, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     tx.update(holdRef, { status: "scaduto", releasedAt: FieldValue.serverTimestamp() });
   });
 }

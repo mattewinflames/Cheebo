@@ -22,6 +22,17 @@ export const SESSIONS = "sessions";
 export const ORDERS = "orders";
 export const MENU = "menu";
 
+/** Minuti oltre i quali un hold ancora in "attesa" è considerato abbandonato
+ *  (il cliente ha chiuso la pagina di pagamento senza pagare né annullare). */
+export const STALE_MINUTES = 15;
+
+/** L'hold in attesa è abbandonato? Stesso criterio del cron release-stale-holds. */
+export function isStaleHold(createdAt: unknown, nowMs: number = Date.now()): boolean {
+  const ms = createdAt && typeof (createdAt as { toMillis?: unknown }).toMillis === "function"
+    ? (createdAt as Timestamp).toMillis() : NaN;
+  return Number.isFinite(ms) && ms < nowMs - STALE_MINUTES * 60_000;
+}
+
 export type HoldStatus = "attesa" | "pagato" | "scaduto";
 
 export interface Hold {

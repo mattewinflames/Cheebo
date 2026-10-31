@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   CAP, emptyLedger, planFirst, planAt, applyPlacement,
   firstFeasibleWindow, freeUpTo, bookableWindows, fmt,
-  maskBlocked, planFirstOpen, planAtOpen,
+  maskBlocked, planFirstOpen, planAtOpen, ledgerToMap, ledgerToMapDense,
 } from "./dispatch";
 
 // Cena: 19:30–22:30 -> 18 finestre da 10 min
@@ -191,5 +191,13 @@ describe("orari di ritiro bloccati dall'admin", () => {
     const all = Array.from({ length: 18 }, (_, i) => i);
     expect(planFirstOpen(emptyLedger(CENA), 1, CENA, 0, all).ok).toBe(false);
     expect(planFirstOpen(emptyLedger(CENA), 0, CENA, 0, all).ok).toBe(false);
+  });
+});
+
+describe("scrittura del registro quando scende (rilascio hold)", () => {
+  it("la mappa densa scrive anche le finestre tornate a 0 (il merge non lascia valori vecchi)", () => {
+    const led = [4, 0, 2];
+    expect(ledgerToMap(led)).toEqual({ "0": 4, "2": 2 });           // sparsa: la finestra 1 non c'è
+    expect(ledgerToMapDense(led)).toEqual({ "0": 4, "1": 0, "2": 2 }); // densa: 1 viene azzerata
   });
 });

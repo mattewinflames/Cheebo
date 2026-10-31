@@ -455,7 +455,7 @@ function BlockedSlotsCard({ settings }: { settings: AppSettings }) {
    parole semplici; solo alla conferma riscrive il registro. Gli ordini non
    vengono mai toccati: cambia solo il conteggio dei patty per fascia.
    ---------------------------------------------------------------------------- */
-type ReconcileData = { before: number[]; after: number[]; beforeTotal: number; afterTotal: number; orders: number; pendingHolds: number; estimated: number };
+type ReconcileData = { before: number[]; after: number[]; beforeTotal: number; afterTotal: number; orders: number; pendingHolds: number; estimated: number; abandoned?: number; abandonedPatty?: number };
 
 async function callReconcile(serviceKey: string, dryRun: boolean): Promise<ReconcileData> {
   const u = auth.currentUser;
@@ -497,6 +497,8 @@ function ReconcileDialog({ serviceKey, service, title, onClose }: { serviceKey: 
   const changed = data ? data.before.map((b, i) => ({ i, b, a: data.after[i] ?? 0 })).filter((x) => x.a !== x.b) : [];
   const fascia = (i: number) => `${fmt(windowStartMin(service, i))}–${fmt(windowEndMin(service, i))}`;
   const diff = data ? data.beforeTotal - data.afterTotal : 0;
+  const abbandonati = data?.abandoned ?? 0;
+  const allineata = changed.length === 0 && abbandonati === 0;
 
   return (
     <>
@@ -520,7 +522,7 @@ function ReconcileDialog({ serviceKey, service, title, onClose }: { serviceKey: 
             <div style={{ display: "flex", gap: 8, color: C.danger }}><AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} /> {msg}</div>
           )}
 
-          {(phase === "preview" || phase === "applying") && data && (changed.length === 0 ? (
+          {(phase === "preview" || phase === "applying") && data && (allineata ? (
             <div style={{ display: "flex", gap: 8, color: C.green, fontWeight: 600 }}><Check size={17} style={{ flexShrink: 0, marginTop: 1 }} /> La piastra è già allineata agli ordini. Non serve fare nulla.</div>
           ) : (
             <>
@@ -528,9 +530,14 @@ function ReconcileDialog({ serviceKey, service, title, onClose }: { serviceKey: 
               <div style={{ marginTop: 6, fontWeight: 700, color: diff > 0 ? C.danger : C.blue }}>
                 {diff > 0 ? `Riconciliando si liberano ${diff} patty fantasma.`
                   : diff < 0 ? `Riconciliando si aggiungono ${-diff} patty che mancavano.`
-                  : "Il totale è giusto ma alcuni patty sono nella fascia sbagliata."}
+                  : changed.length ? "Il totale è giusto ma alcuni patty sono nella fascia sbagliata." : ""}
               </div>
-              <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 12px" }}>
+              {abbandonati > 0 && (
+                <div style={{ marginTop: 8, fontSize: 12.5, color: C.ink, background: "#FDECE8", border: `1px solid #F3C9BC`, borderRadius: 8, padding: "7px 10px" }}>
+                  {abbandonati === 1 ? "1 pagamento online abbandonato" : `${abbandonati} pagamenti online abbandonati`} (pagina di pagamento aperta da oltre 15 minuti senza pagare){(data.abandonedPatty ?? 0) > 0 ? ` occupa${abbandonati === 1 ? "" : "no"} ${data.abandonedPatty} patty` : ""}: verr{abbandonati === 1 ? "à" : "anno"} liberat{abbandonati === 1 ? "o" : "i"}.
+                </div>
+              )}
+              {changed.length > 0 && <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 12px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Fasce che cambiano</div>
                 {changed.map(({ i, b, a }) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 13 }}>
@@ -538,7 +545,7 @@ function ReconcileDialog({ serviceKey, service, title, onClose }: { serviceKey: 
                     <span style={{ fontWeight: 700 }}>{b} → <span style={{ color: a < b ? C.green : C.blue }}>{a}</span> patty</span>
                   </div>
                 ))}
-              </div>
+              </div>}
               {data.estimated > 0 && (
                 <div style={{ marginTop: 10, fontSize: 12, color: "#8A5B12", background: "#FFF8EC", border: "1px solid #F0D9AE", borderRadius: 8, padding: "7px 10px" }}>
                   {data.estimated} {data.estimated === 1 ? "ordine al banco registrato" : "ordini al banco registrati"} prima dell'aggiornamento: i loro patty sono conteggiati nella fascia di ritiro.
@@ -559,7 +566,7 @@ function ReconcileDialog({ serviceKey, service, title, onClose }: { serviceKey: 
         </div>
 
         <div style={{ borderTop: `1px solid ${C.line}`, padding: "12px 18px", display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          {(phase === "preview" || phase === "applying") && data && changed.length > 0 ? (
+          {(phase === "preview" || phase === "applying") && data && !allineata ? (
             <>
               <button onClick={onClose} disabled={phase === "applying"} style={btn("soft")}>Annulla</button>
               <button onClick={apply} disabled={phase === "applying"} style={{ ...btn("primary"), display: "flex", alignItems: "center", gap: 6 }}>

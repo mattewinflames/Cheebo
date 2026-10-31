@@ -61,6 +61,16 @@ export const ledgerToMap = (led: Ledger): Record<string, number> => {
   return map;
 };
 
+/** Array denso → mappa con TUTTE le finestre, zeri compresi. Da usare quando il
+ *  registro può SCENDERE e si scrive con { merge: true }: con la mappa sparsa una
+ *  finestra tornata a 0 non verrebbe scritta e il merge lascerebbe il valore
+ *  vecchio (patty fantasma). */
+export const ledgerToMapDense = (led: Ledger): Record<string, number> => {
+  const map: Record<string, number> = {};
+  led.forEach((v, i) => { map[String(i)] = Math.max(0, v); });
+  return map;
+};
+
 export const windowStartMin = (s: Service, w: number): number => s.startMin + w * WINDOW_MIN;
 export const windowEndMin = (s: Service, w: number): number => windowStartMin(s, w) + WINDOW_MIN;
 

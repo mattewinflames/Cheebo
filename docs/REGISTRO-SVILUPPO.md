@@ -47,6 +47,16 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 
 ## 2026-10-31
 
+### #69 — Patty fantasma: pagamenti abbandonati e merge del registro
+**Tipo:** fix · **Stato:** ✅ fatto
+**File:** `api/create-booking.ts`, `api/reconcile-session.ts`, `api/_lib/holds.ts`, `api/release-stale-holds.ts`, `api/nexi-webhook.ts`, `api/stripe-webhook.ts`, `src/lib/dispatch.ts`, `src/pages/AdminCassa.tsx`
+**Verifica:** tsc app ✓ · tsc api ✓ · test core invariati + 1 nuovo ✓ · build ✓
+
+Due cause di patty fantasma. (1) Il cron `release-stale-holds` gira su GitHub Actions, che nei fatti lo esegue ogni 3–6 ore invece che ogni 5 minuti: i pagamenti abbandonati tenevano la piastra per ore. Ora `create-booking` libera gli hold in attesa da oltre `STALE_MINUTES` della stessa sessione, nella sua transazione, prima di pianificare; il Riconcilia li conta come abbandonati e li rilascia. (2) I rilasci (cron, webhook Nexi e Stripe) scrivevano il registro con `merge` e mappa sparsa: una finestra tornata a 0 non veniva scritta e restava col valore vecchio. Ora usano `ledgerToMapDense`.
+
+**Perché:** il Riconcilia della #68 contava gli hold abbandonati come "pagamento in corso" e dichiarava allineata una piastra con 4 patty fantasma (31/10, Cena 19:30–19:40: 13 segnati, 9 reali).
+**Nota:** il workflow GitHub resta come rete di sicurezza per le sessioni in cui non arrivano altre prenotazioni.
+
 ### #68 — Riconcilia piastra: dal pannello piastra, con anteprima e calcolo corretto
 **Tipo:** fix + feature · **Stato:** ✅ fatto (⚠️ precisione piena dopo il deploy delle regole)
 **File:** `api/reconcile-session.ts`, `src/lib/orders.ts`, `firestore.rules`, `tests/rules.test.mjs`, `src/pages/AdminCassa.tsx`
