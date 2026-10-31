@@ -126,6 +126,42 @@ export function planAt(ledger: Ledger, patties: number, target: number, s: Servi
   return { ok: true, windowIndex: target, readyMin: windowEndMin(s, target), cells, tranches: tranchesOf(cells) };
 }
 
+/* ----------------------------------------------------------------------------
+   Fasce di ritiro BLOCCATE dall'admin (congestione prevista al banco).
+   Una finestra bloccata non si usa per le prenotazioni online: né come orario
+   di ritiro né per cuocervi patty. Resta tutta a disposizione del banco.
+   Le funzioni "Open" sono i wrapper di planFirst/planAt da usare per il canale
+   online; la cassa al banco continua a usare quelle base (ignora i blocchi).
+   ---------------------------------------------------------------------------- */
+
+/** Registro "visto dall'online": le finestre bloccate risultano piene (CAP),
+ *  così windowCapacity vi restituisce 0. Copia: il registro reale non cambia. */
+export function maskBlocked(ledger: Ledger, blocked: readonly number[] = []): Ledger {
+  if (!blocked.length) return ledger;
+  const out = ledger.slice();
+  for (const w of blocked) if (w >= 0 && w < out.length) out[w] = Math.max(out[w], CAP);
+  return out;
+}
+
+/** planFirst che salta le finestre bloccate (anche per ordini senza patty). */
+export function planFirstOpen(ledger: Ledger, patties: number, s: Service, minWindow = 0, blocked: readonly number[] = []): Placement {
+  if (patties <= 0) {
+    const n = ledger.length;
+    const bl = new Set(blocked);
+    for (let w = Math.max(0, minWindow); w < n; w++) {
+      if (!bl.has(w)) return { ok: true, windowIndex: w, readyMin: windowEndMin(s, w), cells: [], tranches: 1 };
+    }
+    return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
+  }
+  return planFirst(maskBlocked(ledger, blocked), patties, s, minWindow);
+}
+
+/** planAt che rifiuta un orario di ritiro bloccato e non cuoce nelle finestre bloccate. */
+export function planAtOpen(ledger: Ledger, patties: number, target: number, s: Service, minWindow = 0, blocked: readonly number[] = []): Placement {
+  if (blocked.includes(target)) return { ok: false, windowIndex: -1, readyMin: -1, cells: [], tranches: 0 };
+  return planAt(maskBlocked(ledger, blocked), patties, target, s, minWindow);
+}
+
 /** Applica un piazzamento: ritorna un NUOVO registro aggiornato (immutabile). */
 export function applyPlacement(ledger: Ledger, p: Placement): Ledger {
   const next = ledger.slice();

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   CAP, emptyLedger, planFirst, planAt, applyPlacement,
   firstFeasibleWindow, freeUpTo, bookableWindows, fmt,
+  maskBlocked, planFirstOpen, planAtOpen,
 } from "./dispatch";
 
 // Cena: 19:30–22:30 -> 18 finestre da 10 min
@@ -139,5 +140,56 @@ describe("minWindow · niente slot passati", () => {
     const a = planFirst(emptyLedger(CENA), 5, CENA);
     const b = planFirst(emptyLedger(CENA), 5, CENA, 0);
     expect(a).toEqual(b);
+  });
+});
+
+describe("orari di ritiro bloccati dall'admin", () => {
+  // finestre 3,4,5 = ritiro 20:10, 20:20, 20:30
+  const BL = [3, 4, 5];
+
+  it("maskBlocked non modifica il registro reale", () => {
+    const led = emptyLedger(CENA);
+    const m = maskBlocked(led, BL);
+    expect(led.every((v) => v === 0)).toBe(true);
+    expect(m[3]).toBe(CAP);
+    expect(m[2]).toBe(0);
+  });
+
+  it("primo disponibile salta la fascia bloccata e non vi cuoce patty", () => {
+    const led = emptyLedger(CENA);
+    for (let w = 0; w < 3; w++) led[w] = CAP; // 19:30–20:00 piene
+    const p = planFirstOpen(led, 2, CENA, 0, BL);
+    expect(p.ok).toBe(true);
+    expect(p.windowIndex).toBe(6);
+    expect(fmt(p.readyMin)).toBe("20:40");
+    expect(p.cells.some((c) => BL.includes(c))).toBe(false);
+  });
+
+  it("anche un ordine senza patty (solo bibite) non riceve un orario bloccato", () => {
+    const p = planFirstOpen(emptyLedger(CENA), 0, CENA, 3, BL);
+    expect(p.windowIndex).toBe(6);
+  });
+
+  it("un orario bloccato non è prenotabile a scelta", () => {
+    expect(planAtOpen(emptyLedger(CENA), 1, 4, CENA, 0, BL).ok).toBe(false);
+    expect(planAtOpen(emptyLedger(CENA), 0, 4, CENA, 0, BL).ok).toBe(false);
+  });
+
+  it("a scelta dopo la fascia: le patty non finiscono nelle finestre bloccate", () => {
+    const p = planAtOpen(emptyLedger(CENA), 3, 6, CENA, 0, BL);
+    expect(p.ok).toBe(true);
+    expect(p.cells.some((c) => BL.includes(c))).toBe(false);
+  });
+
+  it("senza blocchi si comporta come planFirst/planAt", () => {
+    const led = emptyLedger(CENA);
+    expect(planFirstOpen(led, 4, CENA)).toEqual(planFirst(led, 4, CENA));
+    expect(planAtOpen(led, 4, 5, CENA)).toEqual(planAt(led, 4, 5, CENA));
+  });
+
+  it("se tutto il resto del servizio è bloccato, l'ordine online è rifiutato", () => {
+    const all = Array.from({ length: 18 }, (_, i) => i);
+    expect(planFirstOpen(emptyLedger(CENA), 1, CENA, 0, all).ok).toBe(false);
+    expect(planFirstOpen(emptyLedger(CENA), 0, CENA, 0, all).ok).toBe(false);
   });
 });

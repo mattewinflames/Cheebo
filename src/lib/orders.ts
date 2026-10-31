@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Service } from "./dispatch";
-import { totalWindows, planFirst, planAt, ledgerFromMap, ledgerToMap, type Placement } from "./dispatch";
+import { totalWindows, planFirst, planAt, planFirstOpen, planAtOpen, ledgerFromMap, ledgerToMap, type Placement } from "./dispatch";
 import type { BookingReq } from "./booking";
 
 export type OrderStatus = "nuovo" | "in_consegna" | "consegnato";
@@ -73,6 +73,8 @@ export interface BookingInput {
   tender?: Tender;
   /** pezzi di special impegnati, per id voce di menù (da `cartSpecials`) */
   specials?: Record<string, number>;
+  /** Finestre di ritiro bloccate (solo canale online: la cassa al banco le ignora). */
+  blockedWindows?: number[];
 }
 
 export type BookingResult =
@@ -81,8 +83,22 @@ export type BookingResult =
   /** uno special non è più disponibile: `left` è quanto ne resta davvero */
   | { ok: false; reason: "special"; itemId: string; left?: number };
 
-/** Prenota in transazione. Ritorna lo slot assegnato (o full). */
+/** Prenota in transazione. Ritorna lo slot assegnato (o full).
+ *  L'ordine salva anche `cells` (le finestre occupate, una per patty): serve a
+ *  "Riconcilia piastra" per ricostruire il registro con precisione. Se le regole
+ *  Firestore pubblicate sono ancora quelle vecchie (che non conoscono `cells`),
+ *  la scrittura viene rifiutata per permessi: si ripete identica senza `cells`,
+ *  così la cassa non si blocca mai. La transazione rifiutata non lascia tracce. */
 export async function submitBooking(input: BookingInput): Promise<BookingResult> {
+  try {
+    return await submitBookingTx(input, true);
+  } catch (e) {
+    if ((e as { code?: string })?.code === "permission-denied") return submitBookingTx(input, false);
+    throw e;
+  }
+}
+
+async function submitBookingTx(input: BookingInput, withCells: boolean): Promise<BookingResult> {
   const n = totalWindows(input.service);
   const sRef = doc(db, "sessions", input.serviceKey);
   const oRef = doc(collection(db, "orders"));
@@ -116,11 +132,16 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
 
     let plan: Placement;
     let proposedDifferent = false;
+    const bl = input.blockedWindows ?? [];
     if (input.mode === "at" && input.targetWindow != null) {
-      plan = planAt(led, input.patties, input.targetWindow, input.service);
-      if (!plan.ok) { plan = planFirst(led, input.patties, input.service); proposedDifferent = true; }
+      plan = bl.length ? planAtOpen(led, input.patties, input.targetWindow, input.service, 0, bl)
+                       : planAt(led, input.patties, input.targetWindow, input.service);
+      if (!plan.ok) {
+        plan = bl.length ? planFirstOpen(led, input.patties, input.service, 0, bl) : planFirst(led, input.patties, input.service);
+        proposedDifferent = true;
+      }
     } else {
-      plan = planFirst(led, input.patties, input.service);
+      plan = bl.length ? planFirstOpen(led, input.patties, input.service, 0, bl) : planFirst(led, input.patties, input.service);
     }
     if (!plan.ok) return { ok: false, reason: "full" } as BookingResult;
 
@@ -141,6 +162,7 @@ export async function submitBooking(input: BookingInput): Promise<BookingResult>
       serviceKey: input.serviceKey, name: input.name, items: input.items, patties: input.patties,
       windowIndex: plan.windowIndex, readyMin: plan.readyMin, mode: input.mode, pay: input.pay,
       total: input.total, code, phone: input.phone,
+      ...(withCells ? { cells: plan.cells } : {}),
       channel: input.channel ?? "prenotazione",
       ...(input.tender ? { tender: input.tender } : {}),
       status: "nuovo" as OrderStatus, createdAt: serverTimestamp(),

@@ -8,7 +8,7 @@
    Pensato per crescere: è il punto unico dove aggiungere futuri interruttori
    quando Cheebo diventerà uno scheletro riconfigurabile per più attività.
    ========================================================================== */
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, deleteField } from "firebase/firestore";
 import { db } from "./firebase";
 import { SCHEDULE } from "./schedule";
 
@@ -34,6 +34,11 @@ export interface AppSettings {
    *  Precompilato con gli orari reali di schedule.ts; modificabile dall'admin
    *  per ogni giorno in modo persistente. */
   onlyClosedSchedule: Record<number, { label: string; start: string; end: string }[]>;
+  /** Orari di ritiro bloccati per le prenotazioni online, per singolo servizio:
+   *  serviceKey ("2026-10-31-Cena") -> indici delle finestre da 10 minuti.
+   *  L'orario mostrato al cliente è la FINE della finestra (windowEndMin).
+   *  Il banco non è toccato: le fasce restano libere per gli acquisti in loco. */
+  blockedSlots: Record<string, number[]>;
 }
 
 /** Valori usati quando il documento non esiste ancora o non è leggibile.
@@ -45,6 +50,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   costoServizio: 0,
   costoServizioAttivo: false,
   onlyClosedBooking: false,
+  blockedSlots: {},
   onlyClosedSchedule: Object.fromEntries(
     Object.entries(SCHEDULE)
       .filter(([, defs]) => defs.length > 0)
@@ -70,4 +76,20 @@ export function subscribeSettings(cb: (s: AppSettings) => void): () => void {
 /** Aggiorna una o più impostazioni (merge). Richiede un admin loggato. */
 export async function saveSettings(patch: Partial<AppSettings>): Promise<void> {
   await setDoc(ref(), patch, { merge: true });
+}
+
+/** Finestre bloccate di un servizio, ripulite da valori non validi. */
+export function blockedWindowsOf(s: Pick<AppSettings, "blockedSlots">, serviceKey: string): number[] {
+  const raw = s.blockedSlots?.[serviceKey];
+  return Array.isArray(raw) ? raw.filter((w) => Number.isInteger(w) && w >= 0) : [];
+}
+
+/** Imposta le finestre bloccate di UN servizio (sostituisce l'elenco di quel
+ *  servizio, lascia intatti gli altri). `prune` = chiavi di servizi già passati
+ *  da eliminare nella stessa scrittura, così il documento non cresce all'infinito. */
+export async function saveBlockedWindows(serviceKey: string, windows: number[], prune: string[] = []): Promise<void> {
+  const map: Record<string, unknown> = {};
+  for (const k of prune) if (k !== serviceKey) map[k] = deleteField();
+  map[serviceKey] = windows.length ? [...new Set(windows)].sort((a, b) => a - b) : deleteField();
+  await setDoc(ref(), { blockedSlots: map }, { merge: true });
 }

@@ -132,7 +132,7 @@ service cloud.firestore {
                                 'channel','status','createdAt'])
             && d.keys().hasOnly(['serviceKey','name','items','patties','windowIndex',
                                  'readyMin','mode','pay','total','code','phone',
-                                 'channel','tender','status','createdAt'])
+                                 'channel','tender','cells','status','createdAt'])
             && d.serviceKey is string && d.serviceKey.size() >= 12 && d.serviceKey.size() <= 40
             && d.name is string && d.name.size() > 0 && d.name.size() <= 60
             && d.items is list && d.items.size() > 0 && d.items.size() <= 40
@@ -146,6 +146,8 @@ service cloud.firestore {
             && d.phone is string && d.phone.size() <= 30
             && d.channel in ['prenotazione', 'banco']
             && (!('tender' in d) || d.tender in ['contanti', 'carta'])
+            // finestre piastra occupate (una per patty): servono a "Riconcilia piastra"
+            && (!('cells' in d) || (d.cells is list && d.cells.size() == d.patties))
             && d.status == 'nuovo'
             && d.createdAt == request.time;
       }

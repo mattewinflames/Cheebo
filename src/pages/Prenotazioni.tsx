@@ -6,9 +6,9 @@ import {
   cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, isSpecialActive, specialLeft, SPECIAL_LOW,
   type FormatId, type CartType, type CartLine, type MenuItem, type PaninoConfig, type CartReq,
 } from "../lib/menu";
-import { totalWindows, planFirst, planAt, firstFeasibleWindow, windowEndMin, windowCapacity, fmt, type Service } from "../lib/dispatch";
+import { totalWindows, planFirstOpen, planAtOpen, maskBlocked, firstFeasibleWindow, windowEndMin, windowCapacity, fmt, type Service } from "../lib/dispatch";
 import { subscribeMenu } from "../lib/menuStore";
-import { subscribeSettings, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
+import { subscribeSettings, DEFAULT_SETTINGS, blockedWindowsOf, type AppSettings } from "../lib/settings";
 import { submitBooking, startCheckout, subscribeLedger, PAY_ENABLED, PAY_DEFAULT, type BookingMode, type PayMethod } from "../lib/orders";
 import { buildConfirmMessage, waLink } from "../lib/whatsapp";
 import { createPortal } from "react-dom";
@@ -109,31 +109,44 @@ export default function Prenotazioni() {
     return () => { document.body.style.overflow = prev; };
   }, [cartOpen]);
 
+  // Orari di ritiro bloccati dall'admin per questo servizio: per l'online
+  // valgono come finestre piene (né ritiro né cottura). Il server fa lo stesso.
+  const blocked = useMemo(() => blockedWindowsOf(settings, sessionKey), [settings.blockedSlots, sessionKey]);
+  const effLedger = useMemo(() => maskBlocked(ledger, blocked), [ledger, blocked]);
+
   const slots = useMemo(() => {
-    if (!service) return [] as { window: number; readyMin: number; full: boolean }[];
+    if (!service) return [] as { window: number; readyMin: number; full: boolean; blocked: boolean }[];
     const n = totalWindows(service);
     const minW = minWindowNow(sessionKey, service); // scarta le finestre già passate se è oggi
-    const firstOk = firstFeasibleWindow(ledger, patties, minW); // patties=0 -> minW (nessun limite di piastra)
-    const out: { window: number; readyMin: number; full: boolean }[] = [];
+    const firstOk = firstFeasibleWindow(effLedger, patties, minW); // patties=0 -> minW (nessun limite di piastra)
+    const bl = new Set(blocked);
+    const out: { window: number; readyMin: number; full: boolean; blocked: boolean }[] = [];
     for (let w = minW; w < n; w++) {
       // Una finestra è disponibile solo se:
       // 1. c'è spazio cumulato sufficiente fino a lei (firstOk >= 0 e w >= firstOk)
       // 2. la finestra stessa ha capacità per questo orderSize (non è a 13/13 o oltre)
+      // 3. l'admin non ha bloccato quell'orario di ritiro
+      const isBlocked = bl.has(w);
       const cumulOk = firstOk >= 0 && w >= firstOk;
-      const windowOk = patties === 0 || windowCapacity(ledger[w] ?? 0, patties) > 0;
-      out.push({ window: w, readyMin: windowEndMin(service, w), full: !cumulOk || !windowOk });
+      const windowOk = patties === 0 || windowCapacity(effLedger[w] ?? 0, patties) > 0;
+      out.push({ window: w, readyMin: windowEndMin(service, w), full: isBlocked || !cumulOk || !windowOk, blocked: isBlocked });
     }
     return out;
-  }, [ledger, patties, service?.startMin, sessionKey]);
+  }, [effLedger, blocked, patties, service?.startMin, sessionKey]);
   const firstSlot = slots.find((s) => !s.full);
+  // L'orario scelto è stato appena bloccato (o riempito): la scelta decade,
+  // così il riepilogo non mostra un orario che il server non accetterebbe.
+  useEffect(() => {
+    if (choice && choice !== "first" && slots.some((s) => s.window === choice.window && s.blocked)) setChoice(null);
+  }, [slots, choice]);
 
   const preview = useMemo(() => {
     if (!service) return null;
     const minW = minWindowNow(sessionKey, service);
-    if (choice === "first" || choice === null) return planFirst(ledger, patties, service, minW);
-    const p = planAt(ledger, patties, choice.window, service, minW);
-    return p.ok ? p : planFirst(ledger, patties, service, minW);
-  }, [choice, ledger, patties, service?.startMin, sessionKey]);
+    if (choice === "first" || choice === null) return planFirstOpen(ledger, patties, service, minW, blocked);
+    const p = planAtOpen(ledger, patties, choice.window, service, minW, blocked);
+    return p.ok ? p : planFirstOpen(ledger, patties, service, minW, blocked);
+  }, [choice, ledger, blocked, patties, service?.startMin, sessionKey]);
 
   const commit = async () => {
     if (!service || !session) return;
@@ -183,6 +196,7 @@ export default function Prenotazioni() {
         total: totalConServizio,
         phone: "",
         specials: cartSpecials(lines),
+        blockedWindows: blocked,
       });
       if (res.ok) { setResult({ readyMin: res.readyMin, tranches: res.tranches, proposedDifferent: res.proposedDifferent, code: res.code }); setStep("done"); }
       else if (res.reason === "special")
@@ -377,7 +391,7 @@ export default function Prenotazioni() {
                 <Label>Oppure scegli un orario</Label>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(74px,1fr))", gap: 8 }}>
                   {slots.map((sl) => {
-                    if (sl.full) return <div key={sl.window} title="Orario al completo" style={{ background: "#F0F0F5", color: "#BDBDD0", border: `1px solid ${C.line}`, borderRadius: 9, padding: "10px 0", fontWeight: 700, fontSize: 14, textAlign: "center", textDecoration: "line-through", cursor: "not-allowed", userSelect: "none" }}>{fmt(sl.readyMin)}</div>;
+                    if (sl.full) return <div key={sl.window} title={sl.blocked ? "Orario non disponibile online" : "Orario al completo"} style={{ background: "#F0F0F5", color: "#BDBDD0", border: `1px solid ${C.line}`, borderRadius: 9, padding: "10px 0", fontWeight: 700, fontSize: 14, textAlign: "center", textDecoration: "line-through", cursor: "not-allowed", userSelect: "none" }}>{fmt(sl.readyMin)}</div>;
                     const on = choice !== "first" && choice?.window === sl.window;
                     return <button key={sl.window} onClick={() => setChoice(sl)} style={{ background: on ? C.blue : C.surface, color: on ? "#fff" : C.ink, border: `1px solid ${on ? C.blue : C.line}`, borderRadius: 9, padding: "10px 0", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>{fmt(sl.readyMin)}</button>;
                   })}

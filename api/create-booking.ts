@@ -15,7 +15,7 @@ import { createHppOrder } from "./_lib/nexi.js";
 import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, type Hold } from "./_lib/holds.js";
 import { resolveCart, isResolveError, type BookingReq } from "../src/lib/booking.js";
 import { serviceFromKey, upcomingSessions, minWindowNow } from "../src/lib/schedule.js";
-import { totalWindows, planFirst, planAt, ledgerFromMap, ledgerToMap, WINDOW_MIN, type Placement } from "../src/lib/dispatch.js";
+import { totalWindows, planFirstOpen, planAtOpen, ledgerFromMap, ledgerToMap, WINDOW_MIN, type Placement } from "../src/lib/dispatch.js";
 import type { MenuItem } from "../src/lib/menu.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -43,6 +43,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const prenotabili = upcomingSessions(now, undefined, { closedDays });
   if (!prenotabili.some((u) => u.serviceKey === serviceKey))
     return res.status(409).json({ error: "sessione non prenotabile" });
+
+  // Orari di ritiro bloccati dall'admin per questo servizio (congestione al banco).
+  const blockedRaw = (settings.blockedSlots as Record<string, unknown> | undefined)?.[serviceKey];
+  const blocked = Array.isArray(blockedRaw) ? blockedRaw.filter((w): w is number => Number.isInteger(w) && w >= 0) : [];
 
   const costoServizio = (settings.costoServizioAttivo && typeof settings.costoServizio === "number" && settings.costoServizio > 0)
     ? settings.costoServizio : 0;
@@ -99,11 +103,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? service.startMin + (targetWindow + 1) * WINDOW_MIN
         : undefined;
       if (mode === "at" && typeof targetWindow === "number") {
-        plan = planAt(led, resolved.patties, targetWindow, service, minW);
+        plan = planAtOpen(led, resolved.patties, targetWindow, service, minW, blocked);
         // Fallback: riparte dalla finestra SUCCESSIVA a quella scelta (non da zero)
-        if (!plan.ok) plan = planFirst(led, resolved.patties, service, Math.max(targetWindow + 1, minW));
+        if (!plan.ok) plan = planFirstOpen(led, resolved.patties, service, Math.max(targetWindow + 1, minW), blocked);
       } else {
-        plan = planFirst(led, resolved.patties, service, minW);
+        plan = planFirstOpen(led, resolved.patties, service, minW, blocked);
       }
       if (!plan.ok) return { ok: false, status: 409, error: "piastra al completo" };
 

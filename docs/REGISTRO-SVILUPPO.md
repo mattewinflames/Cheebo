@@ -45,6 +45,28 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 
 ---
 
+## 2026-10-31
+
+### #68 — Riconcilia piastra: dal pannello piastra, con anteprima e calcolo corretto
+**Tipo:** fix + feature · **Stato:** ✅ fatto (⚠️ precisione piena dopo il deploy delle regole)
+**File:** `api/reconcile-session.ts`, `src/lib/orders.ts`, `firestore.rules`, `tests/rules.test.mjs`, `src/pages/AdminCassa.tsx`
+**Verifica:** tsc app ✓ · tsc api ✓ · test core invariati (4 fallimenti preesistenti su overflow, non toccati) · build ✓ · ⚠️ `tests/rules.test.mjs` non rieseguito (emulatore)
+
+Il pulsante non chiede più di digitare il codice servizio: sta nel pannello "Occupazione piastra" (scheda Ordini) e agisce sul servizio selezionato. Prima mostra un'anteprima (`dryRun`) — "la piastra segna X patty, gli ordini ne occupano Y, fasce che cambiano" — poi applica. Il registro ora si ricostruisce da **ordini (online + banco) + hold in attesa**, in transazione.
+
+**Perché:** la versione precedente ricostruiva dai soli hold pagati: azzerava i patty degli ordini al banco e dei pagamenti in corso → overbooking se usata durante il servizio. Inoltre la riscrittura non era transazionale.
+**Nota:** gli ordini al banco ora salvano `cells`. Serve `firebase deploy --only firestore:rules`: finché le regole live sono le vecchie, la cassa ripiega automaticamente sulla scrittura senza `cells` (nessun blocco) e il Riconcilia conta quei patty nella fascia di ritiro, segnalandoli come "stimati".
+
+### #67 — Orari di ritiro bloccati per servizio
+**Tipo:** feature · **Stato:** ✅ fatto
+**File:** `src/lib/dispatch.ts`, `src/lib/dispatch.test.ts`, `src/lib/settings.ts`, `api/create-booking.ts`, `src/pages/Prenotazioni.tsx`, `src/pages/AdminCassa.tsx`
+**Verifica:** tsc app ✓ · tsc api ✓ · 7 test nuovi ✓ · build ✓
+
+Opzioni → "Orari di ritiro bloccati": si sceglie giorno+servizio e si toccano gli orari da chiudere all'online. Salvati in `settings/app.blockedSlots[serviceKey]` (indici finestra). Il sito li mostra barrati, "primo disponibile" li salta, `create-booking` li rifiuta (autorità server). Le patty online non vengono cotte in quelle finestre. Il banco li ignora. Nel pannello piastra le fasce bloccate hanno il badge "NO ONLINE".
+
+**Perché:** richiesta del cliente: nei momenti di congestione prevista tra ritiri e acquisti al banco, le prenotazioni online non devono finire in quegli orari.
+**Nota:** nessuna modifica alle regole (settings è già scrivibile dall'admin). Le chiavi di servizi passati vengono eliminate al primo salvataggio successivo.
+
 ## 2026-09-05
 
 ### #66 — BUG CRITICO: fallback silenzioso planAt → planFirst causa overflow piastra

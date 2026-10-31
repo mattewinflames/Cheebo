@@ -150,6 +150,14 @@ describe("orders", () => {
     await assertSucceeds(addDoc(collection(admin(), "orders"), ordine({ tender: "contanti" })));
   });
 
+  it("accetta le celle piastra occupate (una per patty)", async () => {
+    await assertSucceeds(addDoc(collection(admin(), "orders"), ordine({ patties: 2, cells: [0, 1] })));
+  });
+
+  it("rifiuta celle in numero diverso dai patty", async () => {
+    await assertFails(addDoc(collection(admin(), "orders"), ordine({ patties: 2, cells: [0] })));
+  });
+
   it("rifiuta un ordine senza nome", async () => {
     await assertFails(addDoc(collection(admin(), "orders"), ordine({ name: "" })));
   });

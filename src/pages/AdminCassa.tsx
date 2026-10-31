@@ -1,15 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { auth } from "../lib/firebase";
-import { upcomingSessions, resolveService, dateKey, type UpcomingSession } from "../lib/schedule";
+import { upcomingSessions, resolveService, dateKey, minWindowNow, type UpcomingSession } from "../lib/schedule";
 import { CAP, totalWindows, windowStartMin, windowEndMin, planFirst, fmt, type Service } from "../lib/dispatch";
 import { subscribeOrders, subscribeLedger, subscribeHoldsConfirmed, setStatus, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
 import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore";
 import { fetchOrdersRange, buildRows, summarize, downloadCSV, downloadXLSX } from "../lib/export";
 import { computeAnalytics, prevPeriod, addDays, localISODate, type Analytics } from "../lib/analytics";
 import { euro, isPanino, occupiesGriddle, FORMATS, ingredientsOf, menuDrinkSurcharge, griddlePatty, cartLineOf, cartPrice, cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, specialLeft, type FormatId, type CartType, type CartLine, type MenuItem, type MenuType, type PaninoConfig } from "../lib/menu";
-import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings, BarChart2 } from "lucide-react";
-import { subscribeSettings, saveSettings, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
+import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings, BarChart2, Lock } from "lucide-react";
+import { subscribeSettings, saveSettings, saveBlockedWindows, blockedWindowsOf, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
 import { bluetoothSupported, printESCPOS } from "../lib/bluetoothPrinter";
 import { logBLE } from "../lib/bleLogger";
 
@@ -76,12 +76,12 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
           <img src="/cheebo-logo.png" alt="" aria-hidden="true" style={{ position: "fixed", left: "50%", top: "55%", transform: "translate(-50%,-50%)", width: "min(70vw,560px)", opacity: 0.04, pointerEvents: "none", zIndex: 0 }} />
           <div style={{ position: "relative", zIndex: 1 }}>
           {tab === "cassa" && settings.cassaEnabled ? <CassaSection />
-            : tab === "ordini" ? <OrdiniSection />
+            : tab === "ordini" ? <OrdiniSection settings={settings} />
             : tab === "incassi" ? <IncassiSection />
             : tab === "menu" ? <MenuSection />
             : tab === "stats" ? <StatisticheSection />
-            : tab === "opzioni" ? <OpzioniSection settings={settings} activeServiceKey={resolveService()?.serviceKey ?? ""} />
-            : <OrdiniSection />}
+            : tab === "opzioni" ? <OpzioniSection settings={settings} />
+            : <OrdiniSection settings={settings} />}
           </div>
         </div>
       </div>
@@ -132,43 +132,12 @@ function labelGruppo(g: { start: string; end: string }): string {
   return `${sameYear ? short(g.start) : full(g.start)} – ${full(g.end)}`;
 }
 
-function OpzioniSection({ settings, activeServiceKey }: { settings: AppSettings; activeServiceKey: string }) {
+function OpzioniSection({ settings }: { settings: AppSettings }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [nuovaData, setNuovaData] = useState("");
   const [dal, setDal] = useState("");
   const [al, setAl] = useState("");
-
-  // Riconcilia ledger
-  const [reconcileKey, setReconcileKey] = useState(activeServiceKey);
-  const [reconcileBusy, setReconcileBusy] = useState(false);
-  const [reconcileResult, setReconcileResult] = useState<{ before: number; after: number; delta: number; holdsProcessed: number } | null>(null);
-  const [reconcileErr, setReconcileErr] = useState<string | null>(null);
-  const [reconcileConfirm, setReconcileConfirm] = useState(false);
-
-  const doReconcile = async () => {
-    setReconcileBusy(true);
-    setReconcileResult(null);
-    setReconcileErr(null);
-    setReconcileConfirm(false);
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error("Sessione scaduta — effettua di nuovo l'accesso.");
-      const token = await currentUser.getIdToken();
-      const r = await fetch("/api/reconcile-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ serviceKey: reconcileKey }),
-      });
-      const json = await r.json();
-      if (!r.ok) throw new Error(json.error ?? r.statusText);
-      setReconcileResult(json);
-    } catch (e) {
-      setReconcileErr((e as Error).message ?? "Errore sconosciuto");
-    } finally {
-      setReconcileBusy(false);
-    }
-  };
 
   const toggle = async (patch: Partial<AppSettings>) => {
     setBusy(true); setErr(null);
@@ -328,56 +297,7 @@ function OpzioniSection({ settings, activeServiceKey }: { settings: AppSettings;
         )}
       </div>
 
-      {/* Riconcilia piastra */}
-      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
-        <div style={{ fontWeight: 700, fontSize: 15 }}>Riconcilia piastra</div>
-        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45, marginBottom: 12 }}>
-          Rimuove i patty fantasma dal registro piastra ricalcolando il ledger dagli ordini pagati.
-          Usare solo a sessione ferma o tra un servizio e l'altro.
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
-          <input
-            value={reconcileKey}
-            onChange={(e) => { setReconcileKey(e.target.value); setReconcileResult(null); setReconcileErr(null); setReconcileConfirm(false); }}
-            placeholder="es. 2026-10-11-Cena"
-            style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: reconcileBusy ? C.bg : "#fff", fontFamily: "JetBrains Mono, monospace" }}
-          />
-        </div>
-        {reconcileErr && (
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "#FDECE8", border: `1px solid ${C.danger}`, color: C.danger, borderRadius: 10, padding: "9px 12px", fontSize: 13, marginBottom: 10 }}>
-            <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} /> {reconcileErr}
-          </div>
-        )}
-        {reconcileResult && (
-          <div style={{ background: "#EBF7F1", border: "1px solid #7BC9A2", color: "#1E6E47", borderRadius: 10, padding: "9px 12px", fontSize: 13, marginBottom: 10 }}>
-            <Check size={14} style={{ verticalAlign: "middle", marginRight: 6 }} />
-            <strong>Ledger aggiornato.</strong>{" "}
-            Holds pagati: {reconcileResult.holdsProcessed} · Prima: {reconcileResult.before} patty · Dopo: {reconcileResult.after} patty
-            {reconcileResult.delta !== 0 && <> · <strong>Rimossi: {reconcileResult.delta}</strong></>}
-            {reconcileResult.delta === 0 && <> · Già corretto</>}
-          </div>
-        )}
-        {!reconcileConfirm ? (
-          <button
-            disabled={reconcileBusy || !reconcileKey}
-            onClick={() => setReconcileConfirm(true)}
-            style={{ background: reconcileBusy || !reconcileKey ? C.line : C.danger, color: reconcileBusy || !reconcileKey ? C.muted : "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontWeight: 700, fontSize: 13, cursor: reconcileBusy || !reconcileKey ? "default" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            <RotateCcw size={14} /> Riconcilia piastra
-          </button>
-        ) : (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: C.danger, fontWeight: 600 }}>Sovrascrivere il ledger di <em>{reconcileKey}</em>?</span>
-            <button onClick={doReconcile} disabled={reconcileBusy}
-              style={{ background: C.danger, color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-              {reconcileBusy ? "…" : "Sì, riconcilia"}
-            </button>
-            <button onClick={() => setReconcileConfirm(false)} disabled={reconcileBusy}
-              style={{ background: C.line, color: C.ink, border: "none", borderRadius: 8, padding: "7px 14px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-              Annulla
-            </button>
-          </div>
-        )}
-      </div>
+      <BlockedSlotsCard settings={settings} />
 
       {/* Costo servizio di prenotazione */}
       <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
@@ -416,6 +336,242 @@ function OpzioniSection({ settings, activeServiceKey }: { settings: AppSettings;
         </div>
       </div>
     </div>
+  );
+}
+
+/* ----------------------------------------------------------------------------
+   Orari di ritiro bloccati per un servizio preciso.
+   Quando si prevede congestione tra ritiri e acquisti al banco, l'admin chiude
+   alcuni orari di ritiro alle prenotazioni online. Il cliente li vede barrati,
+   "primo disponibile" li salta, il server li rifiuta. La cassa li ignora.
+   Gli orari mostrati sono quelli che vede il cliente (fine della finestra).
+   ---------------------------------------------------------------------------- */
+function rangesOf(windows: number[]): number[][] {
+  const out: number[][] = [];
+  for (const w of [...windows].sort((a, b) => a - b)) {
+    const last = out[out.length - 1];
+    if (last && w === last[last.length - 1] + 1) last.push(w); else out.push([w]);
+  }
+  return out;
+}
+
+function BlockedSlotsCard({ settings }: { settings: AppSettings }) {
+  const sessions = useMemo(() => upcomingSessions(), []);
+  const [key, setKey] = useState(resolveService()?.serviceKey ?? sessions[0]?.serviceKey ?? "");
+  const session = sessions.find((s) => s.serviceKey === key) ?? sessions[0];
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!session) return null;
+  const svc: Service = { startMin: session.startMin, endMin: session.endMin, label: session.label };
+  const n = totalWindows(svc);
+  const minW = minWindowNow(session.serviceKey, svc);        // orari già passati: non modificabili
+  const blocked = blockedWindowsOf(settings, session.serviceKey);
+  const ritiro = (w: number) => fmt(windowEndMin(svc, w));
+
+  const save = async (windows: number[]) => {
+    setBusy(true); setErr(null);
+    const today = dateKey(new Date());
+    const stale = Object.keys(settings.blockedSlots ?? {}).filter((k) => k.slice(0, 10) < today);
+    try { await saveBlockedWindows(session.serviceKey, windows, stale); }
+    catch { setErr("Non salvato. Controlla la connessione e riprova."); }
+    finally { setBusy(false); }
+  };
+  const toggleW = (w: number) => save(blocked.includes(w) ? blocked.filter((x) => x !== w) : [...blocked, w]);
+
+  const attivi = sessions
+    .map((s) => ({ s, w: blockedWindowsOf(settings, s.serviceKey) }))
+    .filter((x) => x.w.length > 0);
+
+  return (
+    <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.7 : 1 }}>
+      <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 7 }}><Lock size={15} /> Orari di ritiro bloccati</div>
+      <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
+        Se prevedi congestione al banco, chiudi alcuni orari di ritiro alle prenotazioni online:
+        sul sito compaiono barrati e nessun ordine online viene assegnato a quegli orari.
+        Il banco non è toccato. Vale solo per il servizio scelto.
+      </div>
+
+      <div style={{ margin: "14px 0 10px" }}>
+        <SessionPicker sessions={sessions} value={session.serviceKey} onChange={(k) => { setKey(k); setErr(null); }} />
+      </div>
+
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Tocca un orario per bloccarlo o sbloccarlo.</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(68px,1fr))", gap: 6 }}>
+        {Array.from({ length: n }, (_, w) => {
+          const on = blocked.includes(w);
+          const passato = w < minW;
+          return (
+            <button key={w} disabled={busy || passato} onClick={() => toggleW(w)}
+              aria-pressed={on} aria-label={`Ritiro ${ritiro(w)} ${on ? "bloccato" : "aperto"}`}
+              style={{ padding: "9px 0", borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: busy || passato ? "default" : "pointer",
+                       border: `1px solid ${on ? C.danger : C.line}`, background: on ? "#FDECE8" : passato ? C.surface : "#fff",
+                       color: on ? C.danger : passato ? "#BDBDD0" : C.ink, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              {on && <Lock size={11} />}{ritiro(w)}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12.5, color: blocked.length ? C.danger : C.muted, fontWeight: blocked.length ? 700 : 400 }}>
+          {blocked.length
+            ? `Bloccati: ${rangesOf(blocked).map((r) => r.length === 1 ? ritiro(r[0]) : `${ritiro(r[0])}–${ritiro(r[r.length - 1])}`).join(", ")}`
+            : "Nessun orario bloccato per questo servizio."}
+        </span>
+        {blocked.length > 0 && (
+          <button onClick={() => save([])} disabled={busy}
+            style={{ background: "none", border: "none", color: C.blue, fontSize: 12.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+            Sblocca tutto
+          </button>
+        )}
+      </div>
+      {err && <div style={{ fontSize: 12.5, color: C.danger, marginTop: 8 }}>{err}</div>}
+
+      {attivi.some((a) => a.s.serviceKey !== session.serviceKey) && (
+        <div style={{ marginTop: 14, borderTop: `1px solid ${C.line}`, paddingTop: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Blocchi attivi in altri servizi</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {attivi.filter((a) => a.s.serviceKey !== session.serviceKey).map(({ s, w }) => {
+              const sv: Service = { startMin: s.startMin, endMin: s.endMin };
+              const r = (x: number) => fmt(windowEndMin(sv, x));
+              return (
+                <button key={s.serviceKey} onClick={() => setKey(s.serviceKey)}
+                  style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 20, padding: "5px 11px", fontSize: 12.5, cursor: "pointer", color: C.ink }}>
+                  <b>{s.dayLabel} · {s.label}</b> {rangesOf(w).map((g) => g.length === 1 ? r(g[0]) : `${r(g[0])}–${r(g[g.length - 1])}`).join(", ")}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------------------
+   Riconcilia piastra — dal pannello "Occupazione piastra" del servizio aperto.
+   Prima chiede al server un'ANTEPRIMA (nessuna scrittura) e la mostra in
+   parole semplici; solo alla conferma riscrive il registro. Gli ordini non
+   vengono mai toccati: cambia solo il conteggio dei patty per fascia.
+   ---------------------------------------------------------------------------- */
+type ReconcileData = { before: number[]; after: number[]; beforeTotal: number; afterTotal: number; orders: number; pendingHolds: number; estimated: number };
+
+async function callReconcile(serviceKey: string, dryRun: boolean): Promise<ReconcileData> {
+  const u = auth.currentUser;
+  if (!u) throw new Error("Sessione scaduta: esci e rientra.");
+  const r = await fetch("/api/reconcile-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${await u.getIdToken()}` },
+    body: JSON.stringify({ serviceKey, dryRun }),
+  });
+  const json = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(json.error ?? `Errore ${r.status}`);
+  return json as ReconcileData;
+}
+
+function ReconcileDialog({ serviceKey, service, title, onClose }: { serviceKey: string; service: Service; title: string; onClose: () => void }) {
+  const [phase, setPhase] = useState<"loading" | "preview" | "applying" | "done" | "error">("loading");
+  const [data, setData] = useState<ReconcileData | null>(null);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    callReconcile(serviceKey, true)
+      .then((d) => { if (alive) { setData(d); setPhase("preview"); } })
+      .catch((e) => { if (alive) { setMsg((e as Error).message); setPhase("error"); } });
+    return () => { alive = false; };
+  }, [serviceKey]);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape" && phase !== "applying") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose, phase]);
+
+  const apply = async () => {
+    setPhase("applying");
+    try { setData(await callReconcile(serviceKey, false)); setPhase("done"); }
+    catch (e) { setMsg((e as Error).message); setPhase("error"); }
+  };
+
+  const changed = data ? data.before.map((b, i) => ({ i, b, a: data.after[i] ?? 0 })).filter((x) => x.a !== x.b) : [];
+  const fascia = (i: number) => `${fmt(windowStartMin(service, i))}–${fmt(windowEndMin(service, i))}`;
+  const diff = data ? data.beforeTotal - data.afterTotal : 0;
+
+  return (
+    <>
+      <div onClick={phase === "applying" ? undefined : onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,20,45,.42)", zIndex: 40 }} />
+      <div role="dialog" aria-modal="true" aria-label="Riconcilia piastra"
+        style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px, calc(100vw - 32px))", maxHeight: "88vh", overflowY: "auto", background: C.bg, borderRadius: 16, zIndex: 41, boxShadow: "0 24px 60px rgba(27,27,71,.3)" }}>
+        <div style={{ padding: "16px 18px 12px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+          <div>
+            <div className="arch" style={{ fontWeight: 800, fontSize: 19 }}>Riconcilia piastra</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>{title}</div>
+          </div>
+          {phase !== "applying" && (
+            <button onClick={onClose} aria-label="Chiudi" style={{ width: 30, height: 30, borderRadius: 8, background: C.surface, border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} color={C.muted} /></button>
+          )}
+        </div>
+
+        <div style={{ padding: "14px 18px", fontSize: 13.5, lineHeight: 1.5 }}>
+          {phase === "loading" && <div style={{ color: C.muted }}>Confronto la piastra con gli ordini…</div>}
+
+          {phase === "error" && (
+            <div style={{ display: "flex", gap: 8, color: C.danger }}><AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} /> {msg}</div>
+          )}
+
+          {(phase === "preview" || phase === "applying") && data && (changed.length === 0 ? (
+            <div style={{ display: "flex", gap: 8, color: C.green, fontWeight: 600 }}><Check size={17} style={{ flexShrink: 0, marginTop: 1 }} /> La piastra è già allineata agli ordini. Non serve fare nulla.</div>
+          ) : (
+            <>
+              <div>La piastra segna <b>{data.beforeTotal} patty</b>, gli ordini effettivi ne occupano <b>{data.afterTotal}</b>.</div>
+              <div style={{ marginTop: 6, fontWeight: 700, color: diff > 0 ? C.danger : C.blue }}>
+                {diff > 0 ? `Riconciliando si liberano ${diff} patty fantasma.`
+                  : diff < 0 ? `Riconciliando si aggiungono ${-diff} patty che mancavano.`
+                  : "Il totale è giusto ma alcuni patty sono nella fascia sbagliata."}
+              </div>
+              <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 12px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Fasce che cambiano</div>
+                {changed.map(({ i, b, a }) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 13 }}>
+                    <span>{fascia(i)}</span>
+                    <span style={{ fontWeight: 700 }}>{b} → <span style={{ color: a < b ? C.green : C.blue }}>{a}</span> patty</span>
+                  </div>
+                ))}
+              </div>
+              {data.estimated > 0 && (
+                <div style={{ marginTop: 10, fontSize: 12, color: "#8A5B12", background: "#FFF8EC", border: "1px solid #F0D9AE", borderRadius: 8, padding: "7px 10px" }}>
+                  {data.estimated} {data.estimated === 1 ? "ordine al banco registrato" : "ordini al banco registrati"} prima dell'aggiornamento: i loro patty sono conteggiati nella fascia di ritiro.
+                </div>
+              )}
+              <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>
+                Gli ordini non vengono toccati: cambia solo il conteggio della piastra. Si può fare anche durante il servizio.
+              </div>
+            </>
+          ))}
+
+          {phase === "done" && data && (
+            <div style={{ display: "flex", gap: 8, color: C.green, fontWeight: 600 }}>
+              <Check size={17} style={{ flexShrink: 0, marginTop: 1 }} />
+              Piastra riconciliata: ora segna {data.afterTotal} patty{data.beforeTotal > data.afterTotal ? ` (liberati ${data.beforeTotal - data.afterTotal})` : ""}.
+            </div>
+          )}
+        </div>
+
+        <div style={{ borderTop: `1px solid ${C.line}`, padding: "12px 18px", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          {(phase === "preview" || phase === "applying") && data && changed.length > 0 ? (
+            <>
+              <button onClick={onClose} disabled={phase === "applying"} style={btn("soft")}>Annulla</button>
+              <button onClick={apply} disabled={phase === "applying"} style={{ ...btn("primary"), display: "flex", alignItems: "center", gap: 6 }}>
+                <RotateCcw size={14} /> {phase === "applying" ? "Riconcilio…" : "Riconcilia"}
+              </button>
+            </>
+          ) : phase !== "loading" && (
+            <button onClick={onClose} style={btn("primary")}>Chiudi</button>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -875,7 +1031,7 @@ function SessionPicker({ sessions, value, onChange }: { sessions: UpcomingSessio
 }
 
 /* ---------------- ORDINI ---------------- */
-function OrdiniSection() {
+function OrdiniSection({ settings }: { settings: AppSettings }) {
   const sessions = useMemo(() => upcomingSessions(), []);
   const active = useMemo(() => resolveService(), []);
   const [sessionKey, setSessionKey] = useState(active?.serviceKey ?? sessions[0]?.serviceKey ?? "");
@@ -889,6 +1045,7 @@ function OrdiniSection() {
   const [filter, setFilter] = useState<"dafare" | "consegnato" | "tutti">("dafare");
   const [printOrder, setPrintOrder] = useState<Order | null>(null);
   const [pianoEspanso, setPianoEspanso] = useState(false);
+  const [reconOpen, setReconOpen] = useState(false);
 
   useEffect(() => {
     if (!sessionKey) return;
@@ -962,6 +1119,7 @@ function OrdiniSection() {
   if (!service) return <div style={{ color: C.muted }}>Nessun servizio disponibile.</div>;
   const n = totalWindows(service);
   const fill = ledger.length ? ledger : new Array(n).fill(0);
+  const bloccate = new Set(blockedWindowsOf(settings, sessionKey));
   const lastUsed = fill.reduce((a, v, i) => (v > 0 ? i : a), -1);
   const shownBase = Math.min(n, Math.max(lastUsed + 2, 5));
   const shown = pianoEspanso ? n : shownBase;
@@ -993,7 +1151,13 @@ function OrdiniSection() {
           <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <span className="arch" style={{ fontWeight: 800, fontSize: 18 }}>Occupazione piastra</span>
-              <span style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 5 }}><Flame size={13} color={C.redline} />{CAP}/10 min</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 5 }}><Flame size={13} color={C.redline} />{CAP}/10 min</span>
+                <button onClick={() => setReconOpen(true)} title="Ricalcola la piastra dagli ordini effettivi (toglie i patty fantasma)"
+                  style={{ display: "flex", alignItems: "center", gap: 5, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 8, padding: "5px 9px", fontSize: 12, fontWeight: 700, color: C.blue, cursor: "pointer" }}>
+                  <RotateCcw size={12} /> Riconcilia
+                </button>
+              </span>
             </div>
             {Array.from({ length: shown }).map((_, wi) => {
               const used = fill[wi] || 0, confirmed = confirmedFill[wi] || 0, pending = Math.max(0, used - confirmed), wStart = windowStartMin(service, wi), here = orders.filter((c) => c.patties > 0 && (Array.isArray(c.cells) && c.cells.length > 0 ? c.cells.includes(wi) : c.windowIndex === wi)), isNow = wi === curWi, empty = used === 0;
@@ -1002,7 +1166,7 @@ function OrdiniSection() {
               return (
                 <div key={wi} style={{ padding: "9px 0", borderBottom: wi < shown - 1 ? `1px solid ${C.line}` : "none" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: isNow ? 700 : 500, color: isNow ? C.blue : C.ink, display: "flex", alignItems: "center", gap: 5 }}><Clock size={11} color={isNow ? C.blue : C.muted} />{fmt(wStart)}–{fmt(windowEndMin(service, wi))}{isNow && <span style={{ fontSize: 10, color: C.blue, marginLeft: 4 }}>ORA</span>}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: isNow ? 700 : 500, color: isNow ? C.blue : C.ink, display: "flex", alignItems: "center", gap: 5 }}><Clock size={11} color={isNow ? C.blue : C.muted} />{fmt(wStart)}–{fmt(windowEndMin(service, wi))}{isNow && <span style={{ fontSize: 10, color: C.blue, marginLeft: 4 }}>ORA</span>}{bloccate.has(wi) && <span title="Ritiro chiuso alle prenotazioni online (Opzioni)" style={{ fontSize: 10, color: C.danger, marginLeft: 4, display: "inline-flex", alignItems: "center", gap: 2, fontWeight: 700 }}><Lock size={10} />NO ONLINE</span>}</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       {isOverflow && <Flame size={13} color={C.amber} />}
                       <span style={{ fontSize: 11.5, fontWeight: used ? 700 : 400, color: used >= CAP ? (isOverflow ? C.amber : C.redline) : empty ? "#b9b9cc" : C.muted }}>{empty ? "libera" : isOverflow ? `${CAP}+${overflowDelta}` : `${used}/${CAP}${used === CAP ? " · piena" : ""}`}</span>
@@ -1193,6 +1357,10 @@ function OrdiniSection() {
           </div>
         </div>
       </div>
+
+      {reconOpen && (
+        <ReconcileDialog serviceKey={sessionKey} service={service} title={`${session.dayLabel} · ${session.label}`} onClose={() => setReconOpen(false)} />
+      )}
 
       <div className="comanda-print">
         {printOrder && (
