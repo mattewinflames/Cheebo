@@ -8,7 +8,7 @@ import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore
 import { fetchOrdersRange, buildRows, summarize, downloadCSV, downloadXLSX } from "../lib/export";
 import { computeAnalytics, prevPeriod, addDays, localISODate, type Analytics } from "../lib/analytics";
 import { euro, isPanino, occupiesGriddle, FORMATS, ingredientsOf, menuDrinkSurcharge, griddlePatty, cartLineOf, cartPrice, cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, specialLeft, type FormatId, type CartType, type CartLine, type MenuItem, type MenuType, type PaninoConfig } from "../lib/menu";
-import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings, BarChart2, Lock } from "lucide-react";
+import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings, BarChart2, Lock, CalendarClock, Power } from "lucide-react";
 import { subscribeSettings, saveSettings, saveBlockedWindows, blockedWindowsOf, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
 import { bluetoothSupported, printESCPOS } from "../lib/bluetoothPrinter";
 import { logBLE } from "../lib/bleLogger";
@@ -35,7 +35,7 @@ export default function AdminCassa() {
 }
 
 function AdminShell({ onLogout }: { onLogout: () => void }) {
-  const [tab, setTab] = useState<"cassa" | "ordini" | "incassi" | "menu" | "opzioni" | "stats">("cassa");
+  const [tab, setTab] = useState<"cassa" | "ordini" | "menu" | "disponibilita" | "incassi" | "stats" | "impostazioni">("cassa");
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   useEffect(() => subscribeSettings(setSettings), []);
 
@@ -54,21 +54,33 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
         @media(max-width:980px){.cassa{grid-template-columns:1fr}.scontrino{position:static}}
         @media(max-width:860px){.cols{grid-template-columns:1fr}.piastra{position:static}}
         @media(max-width:600px){.stats-kpi{grid-template-columns:repeat(2,1fr)!important}.stats-2col{grid-template-columns:1fr!important}}
+        @media(max-width:520px){.esci-label{display:none}.admin-label{display:none}}
         .comanda-print{display:none}`}</style>
       <div className="screen">
         <div style={{ position: "sticky", top: 0, background: C.bg, zIndex: 6, borderBottom: `1px solid ${C.line}` }}>
           <div style={{ maxWidth: 1140, margin: "0 auto", padding: "16px 20px 0" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 11 }}><img src="/cheebo-logo.png" alt="Cheebo" width={38} height={38} /><div className="arch" style={{ fontWeight: 900, fontSize: 26, color: C.blue }}>CHEEBO <span style={{ color: C.muted, fontWeight: 700 }}>Admin</span></div></div>
-              <button onClick={onLogout} style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6 }}><LogOut size={14} /> Esci</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 11 }}><img src="/cheebo-logo.png" alt="Cheebo" width={38} height={38} /><div className="arch" style={{ fontWeight: 900, fontSize: 26, color: C.blue }}>CHEEBO <span className="admin-label" style={{ color: C.muted, fontWeight: 700 }}>Admin</span></div></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <OnlineStatusPill settings={settings} />
+                <button onClick={onLogout} aria-label="Esci" style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6 }}><LogOut size={14} /><span className="esci-label"> Esci</span></button>
+              </div>
             </div>
             <div style={{ display: "flex", gap: 4, marginTop: 12, overflowX: "auto", scrollbarWidth: "none" }}>
+              {/* In servizio */}
               {settings.cassaEnabled && <NavTab icon={<Store size={16} />} label="Cassa" on={tab === "cassa"} onClick={() => setTab("cassa")} />}
               <NavTab icon={<ClipboardList size={16} />} label="Ordini" on={tab === "ordini"} onClick={() => setTab("ordini")} />
-              <NavTab icon={<Wallet size={16} />} label="Incassi" on={tab === "incassi"} onClick={() => setTab("incassi")} />
+              <NavSep />
+              {/* Cosa e quando vendo */}
               <NavTab icon={<UtensilsCrossed size={16} />} label="Menu" on={tab === "menu"} onClick={() => setTab("menu")} />
-              <NavTab icon={<Settings size={16} />} label="Opzioni" on={tab === "opzioni"} onClick={() => setTab("opzioni")} />
-              <NavTab icon={<BarChart2 size={16} />} label="Stats" on={tab === "stats"} onClick={() => setTab("stats")} />
+              <NavTab icon={<CalendarClock size={16} />} label="Disponibilità" on={tab === "disponibilita"} onClick={() => setTab("disponibilita")} />
+              <NavSep />
+              {/* Come è andata */}
+              <NavTab icon={<Wallet size={16} />} label="Incassi" on={tab === "incassi"} onClick={() => setTab("incassi")} />
+              <NavTab icon={<BarChart2 size={16} />} label="Statistiche" on={tab === "stats"} onClick={() => setTab("stats")} />
+              {/* Una tantum, in fondo */}
+              <div style={{ flex: 1, minWidth: 12 }} />
+              <NavTab icon={<Settings size={16} />} label="Impostazioni" on={tab === "impostazioni"} onClick={() => setTab("impostazioni")} />
             </div>
           </div>
         </div>
@@ -80,7 +92,8 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
             : tab === "incassi" ? <IncassiSection />
             : tab === "menu" ? <MenuSection />
             : tab === "stats" ? <StatisticheSection />
-            : tab === "opzioni" ? <OpzioniSection settings={settings} />
+            : tab === "disponibilita" ? <DisponibilitaSection settings={settings} />
+            : tab === "impostazioni" ? <ImpostazioniSection settings={settings} />
             : <OrdiniSection settings={settings} />}
           </div>
         </div>
@@ -90,9 +103,11 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
 }
 
 /* ============================================================================
-   OPZIONI UTENTE — impostazioni dell'attività, condivise su tutti i dispositivi.
-   Contenitore pensato per crescere: oggi c'è la sola "Modalità cassa", domani
-   qui vivranno gli altri interruttori dello scheletro riconfigurabile.
+   DISPONIBILITÀ e IMPOSTAZIONI — le impostazioni dell'attività (settings/app),
+   condivise su tutti i dispositivi. Divise per frequenza d'uso:
+   · Disponibilità: quando si può prenotare online (si tocca spesso)
+   · Impostazioni: configurazione una tantum (modalità cassa, costo servizio)
+   L'interruttore d'emergenza vive anche nell'intestazione (OnlineStatusPill).
    ========================================================================== */
 /* Chiusure: helper per lavorare con date "YYYY-MM-DD" come giorni singoli,
    mostrandole però raggruppate per periodi consecutivi. */
@@ -132,13 +147,12 @@ function labelGruppo(g: { start: string; end: string }): string {
   return `${sameYear ? short(g.start) : full(g.start)} – ${full(g.end)}`;
 }
 
-function OpzioniSection({ settings }: { settings: AppSettings }) {
+/* ----------------------------------------------------------------------------
+   Salvataggio impostazioni condiviso da Disponibilità e Impostazioni.
+   ---------------------------------------------------------------------------- */
+function useSettingsSaver() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [nuovaData, setNuovaData] = useState("");
-  const [dal, setDal] = useState("");
-  const [al, setAl] = useState("");
-
   const toggle = async (patch: Partial<AppSettings>) => {
     setBusy(true); setErr(null);
     try {
@@ -149,36 +163,191 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
       setBusy(false);
     }
   };
+  return { busy, err, toggle };
+}
+
+function ErrBox({ err }: { err: string | null }) {
+  if (!err) return null;
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "#FDECE8", border: `1px solid ${C.danger}`, color: C.danger, borderRadius: 10, padding: "10px 12px", fontSize: 13, marginBottom: 14 }}>
+      <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> {err}
+    </div>
+  );
+}
+
+function SectionTitle({ title, desc }: { title: string; desc: string }) {
+  return (
+    <>
+      <div className="arch" style={{ fontWeight: 800, fontSize: 20, color: C.blue }}>{title}</div>
+      <div style={{ fontSize: 13, color: C.muted, margin: "4px 0 18px", lineHeight: 1.45 }}>{desc}</div>
+    </>
+  );
+}
+
+/** Etichetta del livello (dal più ampio al più specifico) sopra ogni scheda. */
+function Livello({ n, label, hint }: { n: number; label: string; hint: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "18px 0 7px" }}>
+      <span style={{ width: 20, height: 20, borderRadius: "50%", background: C.ghost, color: C.blue, fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{n}</span>
+      <span style={{ fontSize: 12, fontWeight: 800, color: C.ink, textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</span>
+      <span style={{ fontSize: 12, color: C.muted }}>{hint}</span>
+    </div>
+  );
+}
+
+/* Stato effettivo delle prenotazioni online in questo momento.
+   Stessa regola del sito cliente (Prenotazioni.tsx → bookingBlockedByHour). */
+type StatoOnline = { kind: "aperte" } | { kind: "sospese" } | { kind: "pausa"; fino: string; servizio: string };
+function statoOnline(s: AppSettings, now: Date = new Date()): StatoOnline {
+  if (s.bookingBlocked) return { kind: "sospese" };
+  if (s.onlyClosedBooking) {
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    for (const svc of (s.onlyClosedSchedule ?? {})[now.getDay()] ?? []) {
+      const [sh, sm] = svc.start.split(":").map(Number);
+      const [eh, em] = svc.end.split(":").map(Number);
+      if (nowMin >= sh * 60 + sm && nowMin < eh * 60 + em) return { kind: "pausa", fino: svc.end, servizio: svc.label };
+    }
+  }
+  return { kind: "aperte" };
+}
+const STATO_UI = {
+  aperte:  { label: "Online: aperte",   color: C.green,  bg: "#EBF7F1", border: "#B9E2CC" },
+  sospese: { label: "Online: sospese",  color: C.danger, bg: "#FDECE8", border: "#F3C9BC" },
+  pausa:   { label: "Online: in pausa", color: C.amber,  bg: C.amberBg, border: "#F0D9AE" },
+} as const;
+
+/** Ridisegna ogni minuto (lo stato "in pausa" dipende dall'ora). */
+function useMinuteTick() {
+  const [, setT] = useState(0);
+  useEffect(() => { const id = setInterval(() => setT((t) => t + 1), 60_000); return () => clearInterval(id); }, []);
+}
+
+/* ----------------------------------------------------------------------------
+   Interruttore d'emergenza nell'intestazione, visibile da ogni scheda.
+   Mostra lo stato reale dell'online e permette di sospendere/riaprire con
+   una conferma. Agisce solo su "Blocca prenotazioni" (bookingBlocked).
+   ---------------------------------------------------------------------------- */
+function OnlineStatusPill({ settings }: { settings: AppSettings }) {
+  useMinuteTick();
+  const [open, setOpen] = useState(false);
+  const { busy, err, toggle } = useSettingsSaver();
+  const st = statoOnline(settings);
+  const ui = STATO_UI[st.kind];
+  const sospese = settings.bookingBlocked;
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        style={{ display: "flex", alignItems: "center", gap: 7, background: ui.bg, border: `1px solid ${ui.border}`, color: ui.color, borderRadius: 20, padding: "7px 12px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: ui.color }} />
+        {ui.label}
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 30, width: "min(300px, 86vw)", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 14px 40px rgba(27,27,71,.18)", padding: 14 }}>
+            <div style={{ fontSize: 13, lineHeight: 1.45, color: C.ink }}>
+              {st.kind === "sospese" && <>Le prenotazioni online sono <b>sospese</b>. Il sito mostra "prenotazioni non disponibili".</>}
+              {st.kind === "pausa" && <>Il sito non accetta ordini fino alle <b>{st.fino}</b> ({st.servizio}): è attivo "Solo prenotazioni fuori orario" (scheda Disponibilità).</>}
+              {st.kind === "aperte" && <>Il sito accetta prenotazioni online.</>}
+            </div>
+            <ErrBox err={err} />
+            <button disabled={busy}
+              onClick={async () => { await toggle({ bookingBlocked: !sospese }); setOpen(false); }}
+              style={{ ...btn("primary"), width: "100%", marginTop: 12, background: sospese ? C.green : C.danger, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: busy ? 0.6 : 1 }}>
+              <Power size={14} /> {busy ? "…" : sospese ? "Riapri le prenotazioni online" : "Sospendi subito le prenotazioni online"}
+            </button>
+            {!sospese && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 7, lineHeight: 1.4 }}>Per imprevisti (guasto, chiusura improvvisa). Le prenotazioni già pagate restano valide.</div>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------------------
+   Riepilogo "adesso" in cima a Disponibilità: risponde a "il sito sta
+   prendendo ordini, e cosa è chiuso nei prossimi giorni?" senza dover
+   ricostruirlo dalle quattro schede sotto.
+   ---------------------------------------------------------------------------- */
+function StatoAdesso({ settings }: { settings: AppSettings }) {
+  useMinuteTick();
+  const st = statoOnline(settings);
+  const ui = STATO_UI[st.kind];
+  const oggi = dateKey(new Date());
+
+  const prossima = raggruppaConsecutivi(settings.closedDays).find((g) => g.end >= oggi);
+  const chiusoOggi = settings.closedDays.includes(oggi);
+
+  const blocchi = upcomingSessions()
+    .map((s) => ({ s, w: blockedWindowsOf(settings, s.serviceKey) }))
+    .filter((x) => x.w.length > 0);
+  const descBlocco = (x: (typeof blocchi)[number]) => {
+    const sv: Service = { startMin: x.s.startMin, endMin: x.s.endMin };
+    const r = (w: number) => fmt(windowEndMin(sv, w));
+    return `${x.s.dayLabel} · ${x.s.label} ${rangesOf(x.w).map((g) => g.length === 1 ? r(g[0]) : `${r(g[0])}–${r(g[g.length - 1])}`).join(", ")}`;
+  };
+
+  const riga = (label: string, value: React.ReactNode, color: string = C.ink) => (
+    <div style={{ display: "flex", gap: 12, padding: "7px 0", borderTop: `1px solid ${C.line}`, fontSize: 13 }}>
+      <span style={{ width: 118, flexShrink: 0, color: C.muted }}>{label}</span>
+      <span style={{ fontWeight: 600, color, minWidth: 0 }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px 6px", marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: ui.color }} />
+        <span style={{ fontWeight: 800, fontSize: 15, color: ui.color }}>
+          {st.kind === "aperte" ? "Il sito accetta prenotazioni"
+            : st.kind === "sospese" ? "Prenotazioni online sospese"
+            : `In pausa fino alle ${st.fino}`}
+        </span>
+      </div>
+      {riga("Chiusure", chiusoOggi
+        ? <>Oggi chiuso{prossima && prossima.end > oggi ? ` (fino al ${labelGruppo({ start: prossima.end, end: prossima.end })})` : ""}</>
+        : prossima ? <>Prossima: {labelGruppo(prossima)}</> : <span style={{ color: C.muted, fontWeight: 400 }}>Nessuna in programma</span>)}
+      {riga("Orari bloccati", blocchi.length
+        ? <>{descBlocco(blocchi[0])}{blocchi.length > 1 && <span style={{ color: C.muted, fontWeight: 400 }}> · +{blocchi.length - 1} {blocchi.length - 1 === 1 ? "altro servizio" : "altri servizi"}</span>}</>
+        : <span style={{ color: C.muted, fontWeight: 400 }}>Nessuno</span>, blocchi.length ? C.danger : C.ink)}
+      {riga("Fuori orario", settings.onlyClosedBooking ? "Attivo: si prenota solo a negozio chiuso" : <span style={{ color: C.muted, fontWeight: 400 }}>Non attivo</span>)}
+    </div>
+  );
+}
+
+/* ============================================================================
+   DISPONIBILITÀ — quando i clienti possono prenotare dal sito.
+   Quattro livelli, dal più ampio al più specifico: sempre → ogni settimana →
+   date precise → un singolo servizio. In cima lo stato effettivo di adesso.
+   ========================================================================== */
+function DisponibilitaSection({ settings }: { settings: AppSettings }) {
+  const { busy, err, toggle } = useSettingsSaver();
+  const [nuovaData, setNuovaData] = useState("");
+  const [dal, setDal] = useState("");
+  const [al, setAl] = useState("");
+  const [orariAperti, setOrariAperti] = useState(false);
+  const DOW_SHORT = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"];
+  const giorniConOrari = ([0, 1, 2, 3, 4, 5, 6] as const).filter((d) => (settings.onlyClosedSchedule?.[d] ?? []).length > 0);
 
   return (
     <div style={{ maxWidth: 680 }}>
-      <div className="arch" style={{ fontWeight: 800, fontSize: 20, color: C.blue }}>Opzioni utente</div>
-      <div style={{ fontSize: 13, color: C.muted, margin: "4px 0 18px" }}>
-        Impostazioni dell'attività. Valgono su tutti i dispositivi collegati.
-      </div>
+      <SectionTitle title="Disponibilità online"
+        desc="Quando i clienti possono prenotare dal sito. Dal più ampio al più specifico. Il banco non è mai toccato da queste regole." />
+      <ErrBox err={err} />
 
-      {err && (
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "#FDECE8", border: `1px solid ${C.danger}`, color: C.danger, borderRadius: 10, padding: "10px 12px", fontSize: 13, marginBottom: 14 }}>
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} /> {err}
-        </div>
-      )}
+      <StatoAdesso settings={settings} />
 
-      <OptionRow
-        title="Modalità cassa"
-        desc="Abilita la scheda Cassa per registrare gli ordini al banco e farli pesare sulla piastra. Se la disattivi, la scheda sparisce e resta la gestione di prenotazioni, incassi e menu."
-        on={settings.cassaEnabled}
-        busy={busy}
-        onToggle={() => toggle({ cassaEnabled: !settings.cassaEnabled })}
-      />
-
+      <Livello n={1} label="Sempre" hint="tutto il sito, subito" />
       <OptionRow
         title="Blocca prenotazioni"
-        desc="Sospende SUBITO tutte le nuove prenotazioni online (imprevisti: chiusura improvvisa, guasto). Il sito mostra 'prenotazioni non disponibili'. Non tocca le prenotazioni già pagate."
+        desc="Sospende SUBITO tutte le nuove prenotazioni online (imprevisti: chiusura improvvisa, guasto). Il sito mostra 'prenotazioni non disponibili'. Non tocca le prenotazioni già pagate. Lo trovi anche in alto, da qualsiasi scheda."
         on={settings.bookingBlocked}
         busy={busy}
         onToggle={() => toggle({ bookingBlocked: !settings.bookingBlocked })}
       />
 
+      <Livello n={2} label="Ogni settimana" hint="orari ricorrenti per giorno" />
       {/* Prenotazioni solo fuori orario — per giorno della settimana */}
       <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 10 }}>
@@ -195,7 +364,17 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
           </div>
         </div>
 
-        {settings.onlyClosedBooking && (() => {
+        {settings.onlyClosedBooking && (
+          <button onClick={() => setOrariAperti((o) => !o)} aria-expanded={orariAperti}
+            style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: "9px 12px", fontSize: 13, color: C.ink, cursor: "pointer", textAlign: "left", marginBottom: orariAperti ? 10 : 0 }}>
+            <span style={{ flex: 1 }}>
+              <b>Orari per giorno</b> <span style={{ color: C.muted }}>· {giorniConOrari.map((d) => DOW_SHORT[d]).join(", ")}</span>
+            </span>
+            <span style={{ color: C.blue, fontWeight: 700, fontSize: 12.5 }}>{orariAperti ? "Chiudi" : "Modifica"}</span>
+            <ChevronDown size={15} color={C.blue} style={{ transform: orariAperti ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+          </button>
+        )}
+        {settings.onlyClosedBooking && orariAperti && (() => {
           const DOW_LABELS = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
           const schedule = settings.onlyClosedSchedule ?? {};
           return (
@@ -242,6 +421,8 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
         })()}
       </div>
 
+
+      <Livello n={3} label="Date precise" hint="ferie e festivi" />
       <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
         <div style={{ fontWeight: 700, fontSize: 15 }}>Giorni di chiusura</div>
         <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
@@ -297,7 +478,32 @@ function OpzioniSection({ settings }: { settings: AppSettings }) {
         )}
       </div>
 
+
+      <Livello n={4} label="Un servizio" hint="singoli orari di ritiro" />
       <BlockedSlotsCard settings={settings} />
+    </div>
+  );
+}
+
+/* ============================================================================
+   IMPOSTAZIONI — configurazione dell'attività, si tocca di rado.
+   ========================================================================== */
+function ImpostazioniSection({ settings }: { settings: AppSettings }) {
+  const { busy, err, toggle } = useSettingsSaver();
+
+  return (
+    <div style={{ maxWidth: 680 }}>
+      <SectionTitle title="Impostazioni attività"
+        desc="Configurazione che si imposta una volta. Vale su tutti i dispositivi collegati." />
+      <ErrBox err={err} />
+
+      <OptionRow
+        title="Modalità cassa"
+        desc="Abilita la scheda Cassa per registrare gli ordini al banco e farli pesare sulla piastra. Se la disattivi, la scheda sparisce e resta la gestione di prenotazioni, incassi e menu."
+        on={settings.cassaEnabled}
+        busy={busy}
+        onToggle={() => toggle({ cassaEnabled: !settings.cassaEnabled })}
+      />
 
       {/* Costo servizio di prenotazione */}
       <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
@@ -2197,6 +2403,7 @@ function Login() {
 
 /* ---------------- shared ---------------- */
 function Center({ children }: { children: React.ReactNode }) { return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontFamily: "Inter, sans-serif" }}>{children}</div>; }
+function NavSep() { return <span aria-hidden="true" style={{ width: 1, alignSelf: "center", height: 20, background: C.line, margin: "0 6px", flexShrink: 0 }} />; }
 function NavTab({ label, icon, on, onClick }: { label: string; icon: React.ReactNode; on: boolean; onClick: () => void }) { return <button onClick={onClick} style={{ background: "none", border: "none", borderBottom: `3px solid ${on ? C.blue : "transparent"}`, color: on ? C.blue : C.muted, padding: "9px 10px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: -1, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", flexShrink: 0 }}>{icon}{label}</button>; }
 function Stat({ n, label }: { n: React.ReactNode; label: string }) { return <div style={{ textAlign: "right" }}><div className="arch" style={{ fontWeight: 800, fontSize: 24, color: C.blue, lineHeight: 1 }}>{n}</div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginTop: 2 }}>{label}</div></div>; }
 /* Badge del pagamento, condiviso da Ordini e Incassi così le due schede non

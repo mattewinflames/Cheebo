@@ -45,6 +45,18 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 
 ---
 
+## 2026-11-03
+
+### #70 — Gerarchia admin: schede raggruppate, Disponibilità, Impostazioni
+**Tipo:** refactor UI · **Stato:** ✅ fatto
+**File:** `src/pages/AdminCassa.tsx`
+**Verifica:** tsc app ✓ · tsc api ✓ · build ✓ · controllo visivo desktop/mobile ✓ · provato in locale e approvato dal cliente
+
+Schede raggruppate per uso: Cassa · Ordini | Menu · Disponibilità | Incassi · Statistiche | Impostazioni (in fondo). "Opzioni" si divide in **Disponibilità** — riepilogo "adesso" + quattro livelli dal più ampio al più specifico (blocca tutto → ogni settimana → date precise → un servizio) — e **Impostazioni** (modalità cassa, costo servizio). Nuovo bollino "Online: aperte/sospese/in pausa" in intestazione, da ogni scheda, che agisce su `bookingBlocked` con conferma. Tabella settimanale di "fuori orario" richiudibile.
+
+**Perché:** le opzioni erano in fila nell'ordine in cui erano state costruite; l'interruttore d'emergenza stava sepolto tra la configurazione una tantum e per sapere se il sito prendeva ordini bisognava leggere quattro schede.
+**Nota:** nessuna logica cambiata: stessi campi di `settings/app`, stesse scritture. Prossimi passi possibili: lucchetto per fascia nel pannello piastra; avviso su "fuori orario" quando si attiva la modalità cassa; divisione del file per sezioni.
+
 ## 2026-10-31
 
 ### #69 — Patty fantasma: pagamenti abbandonati e merge del registro
