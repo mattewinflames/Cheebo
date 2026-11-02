@@ -55,12 +55,21 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
         @media(max-width:860px){.cols{grid-template-columns:1fr}.piastra{position:static}}
         @media(max-width:600px){.stats-kpi{grid-template-columns:repeat(2,1fr)!important}.stats-2col{grid-template-columns:1fr!important}}
         @media(max-width:520px){.esci-label{display:none}.admin-label{display:none}}
+        @media(max-width:600px){
+          .page-head{padding:12px 16px 0!important}.page-body{padding:16px 16px 48px!important}
+          .brand-logo{width:32px;height:32px}.brand-name{font-size:22px!important}
+          .online-pill{padding:6px 10px!important;font-size:12px!important}
+          .navtab{padding:9px 7px!important;font-size:13px!important}.navsep{margin:0 2px!important}
+          .opt-card{padding:12px 13px!important}
+          .stato-row{gap:8px!important;font-size:12.5px!important}.stato-lbl{width:84px!important;font-size:12px}
+          .periodo-arrow{display:none}
+        }
         .comanda-print{display:none}`}</style>
       <div className="screen">
         <div style={{ position: "sticky", top: 0, background: C.bg, zIndex: 6, borderBottom: `1px solid ${C.line}` }}>
-          <div style={{ maxWidth: 1140, margin: "0 auto", padding: "16px 20px 0" }}>
+          <div className="page-head" style={{ maxWidth: 1140, margin: "0 auto", padding: "16px 20px 0" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 11 }}><img src="/cheebo-logo.png" alt="Cheebo" width={38} height={38} /><div className="arch" style={{ fontWeight: 900, fontSize: 26, color: C.blue }}>CHEEBO <span className="admin-label" style={{ color: C.muted, fontWeight: 700 }}>Admin</span></div></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 11 }}><img className="brand-logo" src="/cheebo-logo.png" alt="Cheebo" width={38} height={38} /><div className="arch brand-name" style={{ fontWeight: 900, fontSize: 26, color: C.blue }}>CHEEBO <span className="admin-label" style={{ color: C.muted, fontWeight: 700 }}>Admin</span></div></div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <OnlineStatusPill settings={settings} />
                 <button onClick={onLogout} aria-label="Esci" style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6 }}><LogOut size={14} /><span className="esci-label"> Esci</span></button>
@@ -84,7 +93,7 @@ function AdminShell({ onLogout }: { onLogout: () => void }) {
             </div>
           </div>
         </div>
-        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "20px 20px 60px", position: "relative" }}>
+        <div className="page-body" style={{ maxWidth: 1140, margin: "0 auto", padding: "20px 20px 60px", position: "relative" }}>
           <img src="/cheebo-logo.png" alt="" aria-hidden="true" style={{ position: "fixed", left: "50%", top: "55%", transform: "translate(-50%,-50%)", width: "min(70vw,560px)", opacity: 0.04, pointerEvents: "none", zIndex: 0 }} />
           <div style={{ position: "relative", zIndex: 1 }}>
           {tab === "cassa" && settings.cassaEnabled ? <CassaSection />
@@ -238,7 +247,7 @@ function OnlineStatusPill({ settings }: { settings: AppSettings }) {
   return (
     <div style={{ position: "relative" }}>
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
-        style={{ display: "flex", alignItems: "center", gap: 7, background: ui.bg, border: `1px solid ${ui.border}`, color: ui.color, borderRadius: 20, padding: "7px 12px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+        className="online-pill" style={{ display: "flex", alignItems: "center", gap: 7, background: ui.bg, border: `1px solid ${ui.border}`, color: ui.color, borderRadius: 20, padding: "7px 12px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: ui.color }} />
         {ui.label}
       </button>
@@ -289,14 +298,14 @@ function StatoAdesso({ settings }: { settings: AppSettings }) {
   };
 
   const riga = (label: string, value: React.ReactNode, color: string = C.ink) => (
-    <div style={{ display: "flex", gap: 12, padding: "7px 0", borderTop: `1px solid ${C.line}`, fontSize: 13 }}>
-      <span style={{ width: 118, flexShrink: 0, color: C.muted }}>{label}</span>
+    <div className="stato-row" style={{ display: "flex", gap: 12, padding: "7px 0", borderTop: `1px solid ${C.line}`, fontSize: 13 }}>
+      <span className="stato-lbl" style={{ width: 118, flexShrink: 0, color: C.muted }}>{label}</span>
       <span style={{ fontWeight: 600, color, minWidth: 0 }}>{value}</span>
     </div>
   );
 
   return (
-    <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px 6px", marginBottom: 6 }}>
+    <div className="opt-card" style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px 6px", marginBottom: 6 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span style={{ width: 9, height: 9, borderRadius: "50%", background: ui.color }} />
         <span style={{ fontWeight: 800, fontSize: 15, color: ui.color }}>
@@ -311,7 +320,7 @@ function StatoAdesso({ settings }: { settings: AppSettings }) {
       {riga("Orari bloccati", blocchi.length
         ? <>{descBlocco(blocchi[0])}{blocchi.length > 1 && <span style={{ color: C.muted, fontWeight: 400 }}> · +{blocchi.length - 1} {blocchi.length - 1 === 1 ? "altro servizio" : "altri servizi"}</span>}</>
         : <span style={{ color: C.muted, fontWeight: 400 }}>Nessuno</span>, blocchi.length ? C.danger : C.ink)}
-      {riga("Fuori orario", settings.onlyClosedBooking ? "Attivo: si prenota solo a negozio chiuso" : <span style={{ color: C.muted, fontWeight: 400 }}>Non attivo</span>)}
+      {riga("Fuori orario", settings.onlyClosedBooking ? "Attivo · solo a negozio chiuso" : <span style={{ color: C.muted, fontWeight: 400 }}>Non attivo</span>)}
     </div>
   );
 }
@@ -341,7 +350,7 @@ function DisponibilitaSection({ settings }: { settings: AppSettings }) {
       <Livello n={1} label="Sempre" hint="tutto il sito, subito" />
       <OptionRow
         title="Blocca prenotazioni"
-        desc="Sospende SUBITO tutte le nuove prenotazioni online (imprevisti: chiusura improvvisa, guasto). Il sito mostra 'prenotazioni non disponibili'. Non tocca le prenotazioni già pagate. Lo trovi anche in alto, da qualsiasi scheda."
+        desc="Sospende subito le nuove prenotazioni online, per imprevisti (guasto, chiusura improvvisa). Quelle già pagate restano valide. È anche nel bollino in alto."
         on={settings.bookingBlocked}
         busy={busy}
         onToggle={() => toggle({ bookingBlocked: !settings.bookingBlocked })}
@@ -349,14 +358,13 @@ function DisponibilitaSection({ settings }: { settings: AppSettings }) {
 
       <Livello n={2} label="Ogni settimana" hint="orari ricorrenti per giorno" />
       {/* Prenotazioni solo fuori orario — per giorno della settimana */}
-      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
+      <div className="opt-card" style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Solo prenotazioni fuori orario</div>
             <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
-              Quando attivo, i clienti possono prenotare online solo mentre il negozio è chiuso.
-              Gli orari sono precompilati con quelli reali e modificabili per ogni giorno.
-              Disattivare quando l'app fungerà da registratore di cassa.
+              Si prenota online solo a negozio chiuso, con orari modificabili per giorno.
+              Da disattivare quando l'app farà da registratore di cassa.
             </div>
           </div>
           <div style={{ paddingTop: 2 }}>
@@ -423,7 +431,7 @@ function DisponibilitaSection({ settings }: { settings: AppSettings }) {
 
 
       <Livello n={3} label="Date precise" hint="ferie e festivi" />
-      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
+      <div className="opt-card" style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
         <div style={{ fontWeight: 700, fontSize: 15 }}>Giorni di chiusura</div>
         <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
           Date in cui il locale è chiuso (ferie, festivi): in quei giorni non si può prenotare online. Non tocca le prenotazioni già pagate.
@@ -447,7 +455,7 @@ function DisponibilitaSection({ settings }: { settings: AppSettings }) {
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input type="date" value={dal} onChange={(e) => setDal(e.target.value)} aria-label="Dal"
             style={{ flex: 1, minWidth: 130, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 10px", fontSize: 14, color: C.ink }} />
-          <span style={{ color: C.muted, fontSize: 13 }}>→</span>
+          <span className="periodo-arrow" style={{ color: C.muted, fontSize: 13 }}>→</span>
           <input type="date" value={al} min={dal || undefined} onChange={(e) => setAl(e.target.value)} aria-label="Al"
             style={{ flex: 1, minWidth: 130, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 8, padding: "9px 10px", fontSize: 14, color: C.ink }} />
           <button
@@ -506,7 +514,7 @@ function ImpostazioniSection({ settings }: { settings: AppSettings }) {
       />
 
       {/* Costo servizio di prenotazione */}
-      <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
+      <div className="opt-card" style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 10 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Costo servizio di prenotazione</div>
@@ -590,7 +598,7 @@ function BlockedSlotsCard({ settings }: { settings: AppSettings }) {
     .filter((x) => x.w.length > 0);
 
   return (
-    <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.7 : 1 }}>
+    <div className="opt-card" style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.7 : 1 }}>
       <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 7 }}><Lock size={15} /> Orari di ritiro bloccati</div>
       <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
         Se prevedi congestione al banco, chiudi alcuni orari di ritiro alle prenotazioni online:
@@ -792,7 +800,7 @@ function OptionRow({ title, desc, on, busy, onToggle }: {
   title: string; desc: string; on: boolean; busy?: boolean; onToggle: () => void;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16,
+    <div className="opt-card" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16,
                   border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10, opacity: busy ? 0.6 : 1 }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 15 }}>{title}</div>
@@ -2403,8 +2411,8 @@ function Login() {
 
 /* ---------------- shared ---------------- */
 function Center({ children }: { children: React.ReactNode }) { return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontFamily: "Inter, sans-serif" }}>{children}</div>; }
-function NavSep() { return <span aria-hidden="true" style={{ width: 1, alignSelf: "center", height: 20, background: C.line, margin: "0 6px", flexShrink: 0 }} />; }
-function NavTab({ label, icon, on, onClick }: { label: string; icon: React.ReactNode; on: boolean; onClick: () => void }) { return <button onClick={onClick} style={{ background: "none", border: "none", borderBottom: `3px solid ${on ? C.blue : "transparent"}`, color: on ? C.blue : C.muted, padding: "9px 10px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: -1, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", flexShrink: 0 }}>{icon}{label}</button>; }
+function NavSep() { return <span className="navsep" aria-hidden="true" style={{ width: 1, alignSelf: "center", height: 20, background: C.line, margin: "0 6px", flexShrink: 0 }} />; }
+function NavTab({ label, icon, on, onClick }: { label: string; icon: React.ReactNode; on: boolean; onClick: () => void }) { return <button className="navtab" onClick={onClick} style={{ background: "none", border: "none", borderBottom: `3px solid ${on ? C.blue : "transparent"}`, color: on ? C.blue : C.muted, padding: "9px 10px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: -1, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", flexShrink: 0 }}>{icon}{label}</button>; }
 function Stat({ n, label }: { n: React.ReactNode; label: string }) { return <div style={{ textAlign: "right" }}><div className="arch" style={{ fontWeight: 800, fontSize: 24, color: C.blue, lineHeight: 1 }}>{n}</div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginTop: 2 }}>{label}</div></div>; }
 /* Badge del pagamento, condiviso da Ordini e Incassi così le due schede non
    divergono. L'icona segue il metodo: banconota = contanti, carta = carta,
