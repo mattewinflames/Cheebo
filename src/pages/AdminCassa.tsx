@@ -800,7 +800,7 @@ function ReconcileDialog({ serviceKey, service, title, onClose }: { serviceKey: 
    che salvano subito su Firestore, come il costo servizio).
    ---------------------------------------------------------------------------- */
 const parseEuro = (t: string): number => Math.round((Number(t.replace(",", ".")) || 0) * 100) / 100;
-const fmtEuroInput = (v: number | undefined): string => (v ? String(v).replace(".", ",") : "0");
+const fmtEuroInput = (v: number | undefined): string => (v ? (Number.isInteger(v) ? String(v) : v.toFixed(2)).replace(".", ",") : "0");
 
 function PriceInput({ value, onChange, commitOnBlur, disabled, style, ariaLabel }: {
   value: number | undefined; onChange: (v: number) => void; commitOnBlur?: boolean;
