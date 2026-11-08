@@ -533,14 +533,10 @@ function ImpostazioniSection({ settings }: { settings: AppSettings }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, color: C.muted, whiteSpace: "nowrap" }}>Importo (€)</span>
-          <input
-            type="number" min="0" step="0.01"
+          <PriceInput commitOnBlur ariaLabel="Costo servizio in euro"
             value={settings.costoServizio ?? 0}
             disabled={busy}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              if (!isNaN(v) && v >= 0) toggle({ costoServizio: Math.round(v * 100) / 100 });
-            }}
+            onChange={(v) => toggle({ costoServizio: v })}
             style={{ width: 90, border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 10px",
               fontSize: 14, fontWeight: 600, background: busy ? C.bg : "#fff" }}
           />
@@ -793,6 +789,42 @@ function ReconcileDialog({ serviceKey, service, title, onClose }: { serviceKey: 
         </div>
       </div>
     </>
+  );
+}
+
+/* ----------------------------------------------------------------------------
+   Campo prezzo in euro. Tiene il TESTO digitato separato dal numero, così
+   "7," resta "7," mentre si scrive (prima la conversione a ogni tasto mangiava
+   la virgola). Accetta virgola o punto, al massimo 2 decimali.
+   `commitOnBlur`: il valore si comunica solo all'uscita dal campo (per i campi
+   che salvano subito su Firestore, come il costo servizio).
+   ---------------------------------------------------------------------------- */
+const parseEuro = (t: string): number => Math.round((Number(t.replace(",", ".")) || 0) * 100) / 100;
+const fmtEuroInput = (v: number | undefined): string => (v ? String(v).replace(".", ",") : "0");
+
+function PriceInput({ value, onChange, commitOnBlur, disabled, style, ariaLabel }: {
+  value: number | undefined; onChange: (v: number) => void; commitOnBlur?: boolean;
+  disabled?: boolean; style?: React.CSSProperties; ariaLabel?: string;
+}) {
+  const [text, setText] = useState(fmtEuroInput(value));
+  // valore cambiato da fuori (altro dispositivo, annulla…): riallinea il testo
+  useEffect(() => { if (parseEuro(text) !== (value ?? 0)) setText(fmtEuroInput(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <input type="text" inputMode="decimal" value={text} disabled={disabled} aria-label={ariaLabel}
+      onChange={(e) => {
+        const t = e.target.value.trim();
+        if (!/^\d*([.,]\d{0,2})?$/.test(t)) return;          // ignora lettere e terzo decimale
+        setText(t);
+        if (!commitOnBlur) onChange(parseEuro(t));
+      }}
+      onFocus={(e) => { if (text === "0") e.target.select(); }}
+      onBlur={() => {
+        const v = parseEuro(text);
+        setText(fmtEuroInput(v));
+        if (commitOnBlur && v !== (value ?? 0)) onChange(v);
+      }}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      style={style} />
   );
 }
 
@@ -2572,14 +2604,14 @@ function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
         <>
           <Field label="Descrizione"><textarea value={item.desc ?? ""} onChange={(e) => set("desc", e.target.value)} rows={2} style={{ ...inp, resize: "vertical" }} /></Field>
           <div style={{ display: "flex", gap: 12 }}>
-            <Field label="Prezzo solo (€)" flex><input value={String(item.solo ?? 0)} onChange={(e) => set("solo", Number(e.target.value.replace(",", ".")) || 0)} inputMode="decimal" style={inp} /></Field>
-            <Field label="Prezzo menu (€)" flex><input value={String(item.menu ?? 0)} onChange={(e) => set("menu", Number(e.target.value.replace(",", ".")) || 0)} inputMode="decimal" style={inp} /></Field>
+            <Field label="Prezzo solo (€)" flex><PriceInput value={item.solo} onChange={(v) => set("solo", v)} style={inp} ariaLabel="Prezzo solo" /></Field>
+            <Field label="Prezzo menu (€)" flex><PriceInput value={item.menu} onChange={(v) => set("menu", v)} style={inp} ariaLabel="Prezzo menu" /></Field>
           </div>
           {item.special && <div style={{ fontSize: 11.5, color: "#8A5B12", marginTop: 4 }}>Lo special è <b>fuori menù</b>: conta il prezzo «solo». Il prezzo menu è facoltativo e, se lasciato a 0, viene ignorato.</div>}
           <Field label="Allergeni (es. 1,3,7)"><input value={item.allergStr ?? ""} onChange={(e) => set("allergStr", e.target.value)} style={inp} /></Field>
         </>
       ) : (
-        <Field label="Prezzo (€)"><input value={String(item.price ?? 0)} onChange={(e) => set("price", Number(e.target.value.replace(",", ".")) || 0)} inputMode="decimal" style={inp} /></Field>
+        <Field label="Prezzo (€)"><PriceInput value={item.price} onChange={(v) => set("price", v)} style={inp} ariaLabel="Prezzo" /></Field>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 6, flexWrap: "wrap", rowGap: 10 }}>
         {panino && <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" }}><Switch on={!!item.veg} onClick={() => set("veg", !item.veg)} /> Vegetariano</label>}
