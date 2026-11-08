@@ -47,6 +47,15 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 
 ## 2026-11-08
 
+### #72 — Archivio special
+**Tipo:** feature · **Stato:** ✅ fatto
+**File:** `src/pages/AdminCassa.tsx`
+**Verifica:** tsc ✓ · build ✓ · controllo visivo ✓
+
+Uno special disattivato e senza sessioni future è "archiviato" (`isArchivedSpecial`): esce dalle sezioni del menu e finisce nell'**Archivio special** in fondo, chiuso per default. Da lì: "Ripubblica" (riapre il form attivo, si scelgono le sessioni), Modifica, "+ Aggiungi uno special passato" (per special mai salvati, es. Chili Cheese Dog). Nel form di uno special attivo c'è "Archivia" (doppio clic di conferma). Gli archiviati restano nelle statistiche special.
+
+**Perché:** archiviare gli special disattivandoli dentro le sezioni avrebbe riempito il menu di voci spente.
+
 ### #71 — Special: patty per pezzo, periodi lunghi, statistiche dedicate
 **Tipo:** feature + fix · **Stato:** ✅ fatto (⚠️ deploy regole + script di correzione da lanciare)
 **File:** `src/lib/menu.ts`, `src/lib/schedule.ts`, `src/lib/analytics.ts`, `src/lib/orders.ts`, `src/pages/AdminCassa.tsx`, `api/nexi-webhook.ts`, `api/stripe-webhook.ts`, `firestore.rules`, `tests/rules.test.mjs`, `scripts/fix-special-patty.mjs`, test `menu`, `schedule-range`, `specials-stats`

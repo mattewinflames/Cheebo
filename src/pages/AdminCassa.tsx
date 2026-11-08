@@ -2269,7 +2269,13 @@ function Money({ label, value, color, big }: { label: string; value: number; col
 }
 
 /* ---------------- MENU ---------------- */
-type EditItem = MenuItem & { allergStr?: string; _new?: boolean };
+/** `_archivio`: nuova voce creata dall'Archivio special (non va mostrata nelle sezioni). */
+type EditItem = MenuItem & { allergStr?: string; _new?: boolean; _archivio?: boolean };
+
+/** Special archiviato: disattivato e senza sessioni future. Vive nell'Archivio
+ *  special in fondo al menu, fuori dalle sezioni; resta nelle statistiche. */
+const isArchivedSpecial = (it: MenuItem): boolean =>
+  !!it.special && !it.active && !it.special.serviceKeys.some((k) => !isPastServiceKey(k));
 type SpecialDraft = { serviceKeys: string[]; stock: number; patty?: number };
 function MenuSection() {
   const [items, setItems] = useState<MenuItem[]>([]);
@@ -2281,8 +2287,17 @@ function MenuSection() {
     ? { id: "new_" + Date.now(), type, name: "", desc: "", solo: 0, menu: 0, veg: false, griddle: type === "smash", allergens: [], active: true, order: items.length, _new: true, allergStr: "" }
     : { id: "new_" + Date.now(), type, name: "", price: 0, active: true, order: items.length, _new: true };
 
+  const [archivioAperto, setArchivioAperto] = useState(false);
+  const archiviati = items.filter(isArchivedSpecial);
+  const toEdit = (it: MenuItem, patch: Partial<EditItem> = {}): EditItem =>
+    ({ ...it, griddle: occupiesGriddle(it), allergStr: (it.allergens ?? []).join(","), ...patch });
+  const blankArchivio = (): EditItem => ({
+    id: "new_" + Date.now(), type: "smash", name: "", desc: "", solo: 0, menu: 0, veg: false, griddle: true, allergens: [],
+    active: false, order: items.length, _new: true, _archivio: true, allergStr: "", special: { serviceKeys: [], stock: 20 },
+  });
+
   const save = async (e: EditItem) => {
-    const { _new, allergStr, ...rest } = e;
+    const { _new, _archivio, allergStr, ...rest } = e;
     const base = { ...rest } as MenuItem;
     if (isPanino(e.type)) base.allergens = (allergStr ?? "").split(",").map((s) => Number(s.trim())).filter((x) => !Number.isNaN(x));
     else delete base.griddle; // il flag piastra non ha senso su sides/dolci/drink
@@ -2302,15 +2317,58 @@ function MenuSection() {
       {SECTIONS.map((sec) => (
         <div key={sec.type}>
           <div className="arch" style={{ fontWeight: 900, fontSize: "clamp(26px,7vw,38px)", color: C.ghost, letterSpacing: -1, marginTop: 24, marginBottom: 6 }}>{sec.label}</div>
-          {items.filter((i) => i.type === sec.type).map((it) =>
+          {items.filter((i) => i.type === sec.type && !isArchivedSpecial(i)).map((it) =>
             editing?.id === it.id
               ? <EditForm key={it.id} item={editing} onChange={setEditing} onSave={save} onCancel={() => setEditing(null)} sessioni={sessioni} onDelete={async () => { await removeItem(it.id); setEditing(null); }} />
-              : <MenuRow key={it.id} item={it} onToggle={() => setActive(it.id, !it.active)} onEdit={() => setEditing({ ...it, griddle: occupiesGriddle(it), allergStr: (it.allergens ?? []).join(",") })} />
+              : <MenuRow key={it.id} item={it} onToggle={() => setActive(it.id, !it.active)} onEdit={() => setEditing(toEdit(it))} />
           )}
-          {editing?._new && editing.type === sec.type && <EditForm item={editing} onChange={setEditing} onSave={save} onCancel={() => setEditing(null)} sessioni={sessioni} />}
-          {!(editing?._new && editing.type === sec.type) && <button onClick={() => setEditing(blank(sec.type))} style={{ display: "flex", alignItems: "center", gap: 8, background: C.surface, color: C.blue, border: `1px dashed ${C.blue}`, borderRadius: 10, padding: "11px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", width: "100%", marginTop: 10 }}>+ Aggiungi in {sec.label}</button>}
+          {editing?._new && !editing._archivio && editing.type === sec.type && <EditForm item={editing} onChange={setEditing} onSave={save} onCancel={() => setEditing(null)} sessioni={sessioni} />}
+          {!(editing?._new && !editing._archivio && editing.type === sec.type) && <button onClick={() => setEditing(blank(sec.type))} style={{ display: "flex", alignItems: "center", gap: 8, background: C.surface, color: C.blue, border: `1px dashed ${C.blue}`, borderRadius: 10, padding: "11px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", width: "100%", marginTop: 10 }}>+ Aggiungi in {sec.label}</button>}
         </div>
       ))}
+      {/* ── Archivio special: fuori vista, ripubblicabili ── */}
+      <div style={{ marginTop: 30, border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface }}>
+        <button onClick={() => setArchivioAperto((o) => !o)} aria-expanded={archivioAperto}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", padding: "13px 15px", cursor: "pointer", textAlign: "left", color: C.ink }}>
+          <span style={{ color: C.amber, fontSize: 15 }}>★</span>
+          <span style={{ flex: 1 }}>
+            <span style={{ fontWeight: 700, fontSize: 14.5 }}>Archivio special</span>
+            <span style={{ fontSize: 12.5, color: C.muted }}> · {archiviati.length} {archiviati.length === 1 ? "special passato" : "special passati"}</span>
+          </span>
+          <ChevronDown size={16} color={C.muted} style={{ transform: archivioAperto ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+        </button>
+        {archivioAperto && (
+          <div style={{ padding: "0 15px 14px" }}>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 6 }}>
+              Special non più in vendita: non compaiono sul sito né in cassa, ma restano nelle statistiche.
+              "Ripubblica" lo rimette in vendita scegliendo le sessioni.
+            </div>
+            {archiviati.length === 0 && !(editing?._archivio) && <div style={{ fontSize: 13, color: C.muted, padding: "8px 0" }}>Nessuno special archiviato.</div>}
+            {archiviati.map((it) => editing?.id === it.id
+              ? <EditForm key={it.id} item={editing} onChange={setEditing} onSave={save} onCancel={() => setEditing(null)} sessioni={sessioni} onDelete={async () => { await removeItem(it.id); setEditing(null); }} />
+              : (
+                <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.line}` }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14.5, display: "flex", alignItems: "center", gap: 6 }}>{it.name || "—"}{it.veg && <Leaf size={13} color={C.veg} />}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>★ special · {euro(it.solo ?? 0)}</div>
+                  </div>
+                  <button onClick={() => setEditing(toEdit(it, { active: true }))} title="Rimettilo in vendita scegliendo le sessioni"
+                    style={{ ...btn("soft"), padding: "7px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5, color: C.blue }}>
+                    <RotateCcw size={13} /> Ripubblica
+                  </button>
+                  <button onClick={() => setEditing(toEdit(it))} aria-label={`Modifica ${it.name}`} style={{ width: 34, height: 34, borderRadius: 9, background: "#fff", border: `1px solid ${C.line}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Pencil size={15} color={C.ink} /></button>
+                </div>
+              ))}
+            {editing?._new && editing._archivio
+              ? <EditForm item={editing} onChange={setEditing} onSave={save} onCancel={() => setEditing(null)} sessioni={sessioni} />
+              : <button onClick={() => setEditing(blankArchivio())}
+                  style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", color: C.blue, border: `1px dashed ${C.blue}`, borderRadius: 10, padding: "10px 14px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", width: "100%", marginTop: 10 }}>
+                  + Aggiungi uno special passato
+                </button>}
+          </div>
+        )}
+      </div>
+
       <div style={{ marginTop: 26, padding: "13px 15px", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>
         <b style={{ color: C.ink }}>Struttura standard automatica:</b> ogni panino è in formati Singolo · Doppio (+2€) · Triplo (+4€), con Solo panino / Menu e gli Extra.
       </div>
@@ -2504,6 +2562,7 @@ function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
   const panino = isPanino(item.type);
   const mancano = mancanzeVoce(item);
   const [provato, setProvato] = useState(false);
+  const [confermaArchivio, setConfermaArchivio] = useState(false);
   // Non si blocca il tasto: al clic, se manca qualcosa lo si dice; altrimenti salva.
   const salva = () => { if (mancano.length) { setProvato(true); return; } onSave(item); };
   return (
@@ -2561,6 +2620,13 @@ function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
         <button onClick={salva} style={{ ...btn("primary"), display: "flex", alignItems: "center", gap: 6 }}><Check size={15} /> Salva</button>
         <button onClick={onCancel} style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6 }}><X size={15} /> Annulla</button>
+        {item.special && !item._new && !isArchivedSpecial(item) && (
+          <button onClick={() => { if (!confermaArchivio) { setConfermaArchivio(true); return; } onSave({ ...item, active: false, special: { ...item.special!, serviceKeys: [] } }); }}
+            title="Toglie lo special dal sito e lo sposta nell'Archivio special, in fondo al menu"
+            style={{ ...btn("soft"), display: "flex", alignItems: "center", gap: 6, color: confermaArchivio ? C.danger : C.ink }}>
+            ★ {confermaArchivio ? "Conferma: togli dal sito" : "Archivia"}
+          </button>
+        )}
         {onDelete && <button onClick={onDelete} style={{ marginLeft: "auto", background: "none", color: C.danger, border: `1px solid ${C.line}`, borderRadius: 9, padding: "9px 14px", fontWeight: 600, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}><Trash2 size={15} /> Elimina</button>}
       </div>
     </div>
