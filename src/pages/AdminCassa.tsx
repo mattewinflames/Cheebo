@@ -1843,17 +1843,34 @@ function RankedList({ title, items, color }: { title: string; items: { name: str
 /* Classifica degli special nel periodo: chi ha venduto di più, in quanti
    servizi, il servizio migliore. L'incasso è stimato al prezzo attuale perché
    gli ordini salvano le etichette, non il prezzo di ogni riga. */
-function SpecialStatsCard({ stats }: { stats: SpecialStat[] }) {
+function SpecialStatsCard({ stats, scope, onScope, loading, etichetta }: {
+  stats: SpecialStat[]; scope: "tutto" | "periodo"; onScope: (s: "tutto" | "periodo") => void;
+  loading: boolean; etichetta: string;
+}) {
   const max = stats[0]?.qty ?? 1;
   const top = stats[0];
   const pari = top ? stats.filter((s) => s.qty === top.qty) : [];
   return (
     <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
-      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ color: C.amber }}>★</span> Special
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}><span style={{ color: C.amber }}>★</span> Special</div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{etichetta}</div>
+        </div>
+        <div role="group" aria-label="Periodo del box special" style={{ display: "flex", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 8, padding: 2 }}>
+          {([["tutto", "Tutto lo storico"], ["periodo", "Periodo selezionato"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => onScope(k)} aria-pressed={scope === k}
+              style={{ border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: scope === k ? 700 : 500, cursor: "pointer",
+                       background: scope === k ? "#fff" : "transparent", color: scope === k ? C.blue : C.muted, boxShadow: scope === k ? "0 1px 3px rgba(27,27,71,.12)" : "none" }}>
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
-      {!top ? (
-        <div style={{ color: C.muted, fontSize: 13 }}>Nessuno special venduto nel periodo.</div>
+      {loading ? (
+        <div style={{ color: C.muted, fontSize: 13 }}>Carico tutto lo storico…</div>
+      ) : !top ? (
+        <div style={{ color: C.muted, fontSize: 13 }}>Nessuno special venduto {scope === "tutto" ? "finora" : "nel periodo"}.</div>
       ) : (
         <>
           <div style={{ background: C.amberBg, border: "1px solid #F0D9AE", borderRadius: 10, padding: "12px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -1935,10 +1952,24 @@ function StatisticheSection() {
   // Special: tutte le voci di menu con configurazione special, anche disattivate
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   useEffect(() => subscribeMenu(setMenuItems, false), []);
+  /* Box Special: gli special girano in momenti diversi, quindi di default si
+     confrontano su TUTTO lo storico. Appena si sceglie un periodo per la pagina,
+     il box si allinea a quello; dal box si torna allo storico completo. */
+  const [specialScope, setSpecialScope] = useState<"tutto" | "periodo">("tutto");
+  const [storico, setStorico] = useState<Order[] | null>(null);
+  useEffect(() => {
+    if (specialScope !== "tutto" || storico) return;
+    fetchOrdersRange("2000-01-01", oggi).then(setStorico).catch(() => setStorico([]));
+  }, [specialScope, storico, oggi]);
+  const specialOrders = specialScope === "tutto" ? (storico ?? []) : orders;
   const specialStats: SpecialStat[] = useMemo(
-    () => computeSpecialStats(orders, menuItems.filter((m) => m.special).map((m) => ({ id: m.id, name: m.name, price: m.solo ?? 0, veg: m.veg }))),
-    [orders, menuItems],
+    () => computeSpecialStats(specialOrders, menuItems.filter((m) => m.special).map((m) => ({ id: m.id, name: m.name, price: m.solo ?? 0, veg: m.veg }))),
+    [specialOrders, menuItems],
   );
+  const primoGiorno = storico && storico.length ? storico[0].serviceKey.slice(0, 10) : null;   // ordinati per serviceKey
+  const fmtGiorno = (iso: string) => new Date(iso + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
+  const etichettaPeriodo = preset === "custom" ? `dal ${fmtGiorno(from)} al ${fmtGiorno(to)}`
+    : preset === "oggi" ? "oggi" : `ultimi ${preset.replace("g", "")} giorni`;
 
   const dateInp: React.CSSProperties = { ...inp, padding: "8px 10px", fontSize: 13 };
   const maxFat    = Math.max(...stats.trend.map(d => d.fat), 1);
@@ -1961,7 +1992,7 @@ function StatisticheSection() {
       {/* ── Filtro ── */}
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
         {PRESETS.map(p => (
-          <button key={p.id} onClick={() => setPreset(p.id)}
+          <button key={p.id} onClick={() => { setPreset(p.id); setSpecialScope("periodo"); }}
             style={{ padding: "7px 13px", borderRadius: 8, border: `1px solid ${preset === p.id ? C.blue : C.line}`,
                      background: preset === p.id ? C.blue : "#fff", color: preset === p.id ? "#fff" : C.ink,
                      fontWeight: preset === p.id ? 700 : 400, fontSize: 13, cursor: "pointer" }}>
@@ -1970,9 +2001,9 @@ function StatisticheSection() {
         ))}
         {preset === "custom" && (
           <>
-            <input type="date" value={customFrom} max={customTo} onChange={e => setCustomFrom(e.target.value)} style={dateInp} />
+            <input type="date" value={customFrom} max={customTo} onChange={e => { setCustomFrom(e.target.value); setSpecialScope("periodo"); }} style={dateInp} />
             <span style={{ fontSize: 12, color: C.muted }}>→</span>
-            <input type="date" value={customTo} min={customFrom} onChange={e => setCustomTo(e.target.value)} style={dateInp} />
+            <input type="date" value={customTo} min={customFrom} onChange={e => { setCustomTo(e.target.value); setSpecialScope("periodo"); }} style={dateInp} />
           </>
         )}
         {loading && <span style={{ fontSize: 12, color: C.muted, marginLeft: 8 }}>Caricamento…</span>}
@@ -2048,7 +2079,10 @@ function StatisticheSection() {
           <RankedList title="🍔 Panini più venduti" items={stats.topPanini} color={C.blue} />
         </div>
 
-        <SpecialStatsCard stats={specialStats} />
+        <SpecialStatsCard stats={specialStats}
+          scope={specialScope} onScope={setSpecialScope}
+          loading={specialScope === "tutto" && storico === null}
+          etichetta={specialScope === "tutto" ? (primoGiorno ? `tutto lo storico, dal ${fmtGiorno(primoGiorno)}` : "tutto lo storico") : etichettaPeriodo} />
 
         <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
