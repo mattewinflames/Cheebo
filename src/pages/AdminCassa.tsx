@@ -2346,7 +2346,9 @@ function mancanzeVoce(item: EditItem): string[] {
   if (isPanino(item.type)) {
     if (!(Number(item.solo) > 0)) m.push(item.special ? "il prezzo dello special" : "il prezzo «solo»");
     if (!item.special && !(Number(item.menu) > 0)) m.push("il prezzo «menu»");
-    if (item.special && item.special.serviceKeys.length === 0) m.push("almeno una sessione per lo special");
+    // uno special DISATTIVATO senza sessioni è "archiviato": non compare da
+    // nessuna parte ma tiene il nome per le statistiche degli ordini passati
+    if (item.special && item.active && item.special.serviceKeys.filter((k) => !isPastServiceKey(k)).length === 0) m.push("almeno una sessione futura per lo special (oppure disattivalo per archiviarlo)");
   } else if (!(Number(item.price) > 0)) {
     m.push("il prezzo");
   }
@@ -2359,8 +2361,8 @@ function mancanzeVoce(item: EditItem): string[] {
    che durano settimane) o singolarmente nella griglia dei prossimi giorni.
    Le sessioni di giorni passati non si mostrano e si tolgono al salvataggio.
    ---------------------------------------------------------------------------- */
-function SpecialEditor({ special, griddle, sessioni, onChange }: {
-  special: SpecialDraft; griddle: boolean; sessioni: UpcomingSession[];
+function SpecialEditor({ special, griddle, active, sessioni, onChange }: {
+  special: SpecialDraft; griddle: boolean; active: boolean; sessioni: UpcomingSession[];
   onChange: (sp: SpecialDraft) => void;
 }) {
   const oggi = dateKey(new Date());
@@ -2454,7 +2456,9 @@ function SpecialEditor({ special, griddle, sessioni, onChange }: {
       {/* Riepilogo */}
       <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #F2D9AE", fontSize: 12.5, color: "#8A5B12", lineHeight: 1.5 }}>
         {future.length === 0
-          ? <b>Nessuna sessione selezionata: lo special non comparirà.</b>
+          ? (active
+              ? <b>Nessuna sessione selezionata: lo special non comparirà.</b>
+              : <><b>Special archiviato</b>: disattivato e senza sessioni, non compare sul sito né in cassa ma resta nelle statistiche degli ordini passati.</>)
           : <>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <span>Attivo in <b>{future.length} session{future.length === 1 ? "e" : "i"}</b>, da <b>{formatServiceKey(future[0])}</b> a <b>{formatServiceKey(future[future.length - 1])}</b>.</span>
@@ -2546,7 +2550,7 @@ function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
       </div>
 
       {item.special && (
-        <SpecialEditor special={item.special} griddle={!!item.griddle} sessioni={sessioni}
+        <SpecialEditor special={item.special} griddle={!!item.griddle} active={item.active} sessioni={sessioni}
           onChange={(sp) => set("special", sp)} />
       )}
       {provato && mancano.length > 0 && (
