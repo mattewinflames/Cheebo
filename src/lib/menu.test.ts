@@ -214,3 +214,17 @@ describe("special a disponibilità limitata", () => {
     expect(cartSpecials(lines)).toEqual({ lobster: 3 });
   });
 });
+
+import { specialCartLine as _scl } from "./menu";
+describe("patty per pezzo degli special", () => {
+  const base = { id: "bb", type: "smash" as const, name: "Big Bruce", active: true, order: 0, solo: 15, griddle: true };
+  it("di default un pezzo occupa 1 patty (comportamento storico)", () => {
+    expect(_scl({ ...base, special: { serviceKeys: [], stock: 10 } }).patty).toBe(1);
+  });
+  it("con patty per pezzo = 2 ne occupa 2", () => {
+    expect(_scl({ ...base, special: { serviceKeys: [], stock: 10, patty: 2 } }).patty).toBe(2);
+  });
+  it("se non è da piastra non occupa patty, qualunque sia il valore", () => {
+    expect(_scl({ ...base, griddle: false, special: { serviceKeys: [], stock: 10, patty: 2 } }).patty).toBe(0);
+  });
+});

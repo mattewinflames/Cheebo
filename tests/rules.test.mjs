@@ -154,6 +154,14 @@ describe("orders", () => {
     await assertSucceeds(addDoc(collection(admin(), "orders"), ordine({ patties: 2, cells: [0, 1] })));
   });
 
+  it("accetta gli special contenuti (id → pezzi)", async () => {
+    await assertSucceeds(addDoc(collection(admin(), "orders"), ordine({ specials: { bigbruce: 2 } })));
+  });
+
+  it("rifiuta un campo special non mappa", async () => {
+    await assertFails(addDoc(collection(admin(), "orders"), ordine({ specials: "bigbruce" })));
+  });
+
   it("rifiuta celle in numero diverso dai patty", async () => {
     await assertFails(addDoc(collection(admin(), "orders"), ordine({ patties: 2, cells: [0] })));
   });

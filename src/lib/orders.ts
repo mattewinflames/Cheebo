@@ -56,6 +56,9 @@ export interface Order {
   status: OrderStatus;
   channel?: OrderChannel;
   tender?: Tender;
+  /** special contenuti: id voce di menù → pezzi. Assente sugli ordini precedenti
+   *  a novembre 2026 (le statistiche li riconoscono dall'etichetta). */
+  specials?: Record<string, number>;
 }
 
 export interface BookingInput {
@@ -90,15 +93,22 @@ export type BookingResult =
  *  la scrittura viene rifiutata per permessi: si ripete identica senza `cells`,
  *  così la cassa non si blocca mai. La transazione rifiutata non lascia tracce. */
 export async function submitBooking(input: BookingInput): Promise<BookingResult> {
-  try {
-    return await submitBookingTx(input, true);
-  } catch (e) {
-    if ((e as { code?: string })?.code === "permission-denied") return submitBookingTx(input, false);
-    throw e;
+  // Campi aggiunti nel tempo alle regole: si prova dal più completo al minimo,
+  // così con regole Firestore non ancora aggiornate la cassa non si blocca mai.
+  const varianti: { cells: boolean; specials: boolean }[] = [
+    { cells: true, specials: true }, { cells: true, specials: false }, { cells: false, specials: false },
+  ];
+  for (let i = 0; ; i++) {
+    try {
+      return await submitBookingTx(input, varianti[i]);
+    } catch (e) {
+      if ((e as { code?: string })?.code === "permission-denied" && i < varianti.length - 1) continue;
+      throw e;
+    }
   }
 }
 
-async function submitBookingTx(input: BookingInput, withCells: boolean): Promise<BookingResult> {
+async function submitBookingTx(input: BookingInput, extra: { cells: boolean; specials: boolean }): Promise<BookingResult> {
   const n = totalWindows(input.service);
   const sRef = doc(db, "sessions", input.serviceKey);
   const oRef = doc(collection(db, "orders"));
@@ -162,7 +172,8 @@ async function submitBookingTx(input: BookingInput, withCells: boolean): Promise
       serviceKey: input.serviceKey, name: input.name, items: input.items, patties: input.patties,
       windowIndex: plan.windowIndex, readyMin: plan.readyMin, mode: input.mode, pay: input.pay,
       total: input.total, code, phone: input.phone,
-      ...(withCells ? { cells: plan.cells } : {}),
+      ...(extra.cells ? { cells: plan.cells } : {}),
+      ...(extra.specials && richiesti.length ? { specials: Object.fromEntries(richiesti) } : {}),
       channel: input.channel ?? "prenotazione",
       ...(input.tender ? { tender: input.tender } : {}),
       status: "nuovo" as OrderStatus, createdAt: serverTimestamp(),

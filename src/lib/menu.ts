@@ -112,7 +112,14 @@ export interface SpecialConfig {
   serviceKeys: string[];
   /** pezzi disponibili per ogni sessione */
   stock: number;
+  /** patty per pezzo (es. 2 per un doppio). Conta solo se la voce è "da piastra".
+   *  Se assente vale 1: è il comportamento storico. */
+  patty?: number;
 }
+
+/** Patty che un pezzo di special occupa sulla piastra (0 se non è da piastra). */
+export const specialPatty = (item: MenuItem): number =>
+  occupiesGriddle(item) ? Math.max(1, Math.min(5, Math.round(item.special?.patty ?? 1))) : 0;
 
 /** Lo special è proposto in questa sessione? */
 export const isSpecialActive = (item: MenuItem, serviceKey: string): boolean =>
@@ -235,7 +242,8 @@ export const cartLineOf = (c: PaninoConfig): Omit<CartLine, "qty"> => ({
    Riga di carrello di uno SPECIAL. Lo special vive "fuori menù": niente
    formato, tipo, extra o sostituzioni — si aggiunge e basta, a prezzo fisso.
    Il prezzo è il `solo` (l'unico che ha senso su una voce senza versione menu);
-   occupa la piastra soltanto se marcato `griddle`, esattamente come un panino.
+   occupa la piastra soltanto se marcato `griddle`, con `special.patty` patty
+   per pezzo (default 1). È la stessa funzione per sito, cassa e server.
    Chiave dedicata (`id|special`) così non si confonde mai con una riga
    configurata dello stesso id.
    ---------------------------------------------------------------------------- */
@@ -243,7 +251,7 @@ export const specialCartLine = (item: MenuItem): Omit<CartLine, "qty"> => ({
   key: `${item.id}|special`,
   label: item.name,
   price: item.solo ?? 0,
-  patty: griddlePatty(item, "singolo"),
+  patty: specialPatty(item),
   specialId: item.id,
   req: { kind: "special", itemId: item.id },
 });

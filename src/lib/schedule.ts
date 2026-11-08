@@ -131,3 +131,49 @@ export function pastSessions(
   }
   return out;
 }
+
+/** Etichette dei servizi previsti dal calendario, in ordine di orario (es. ["Pranzo", "Cena"]). */
+const SERVICE_START = new Map<string, number>();
+for (const d of Object.values(SCHEDULE).flat()) SERVICE_START.set(d.label, Math.min(SERVICE_START.get(d.label) ?? 1440, toMin(d.start)));
+export const SERVICE_LABELS: string[] = [...SERVICE_START.keys()].sort((a, b) => SERVICE_START.get(a)! - SERVICE_START.get(b)!);
+
+/** Ordine cronologico delle chiavi servizio: per data, poi per orario del servizio
+ *  (l'ordine alfabetico metterebbe "Cena" prima di "Pranzo"). */
+export const compareServiceKeys = (a: string, b: string): number =>
+  a.slice(0, 10).localeCompare(b.slice(0, 10)) || (SERVICE_START.get(a.slice(11)) ?? 0) - (SERVICE_START.get(b.slice(11)) ?? 0);
+
+/** Sessioni del calendario fra due date "YYYY-MM-DD" (estremi inclusi), solo
+ *  per i servizi in `labels`. Salta quelle già finite rispetto a `now`.
+ *  Serve a selezionare uno special per un periodo lungo (es. tutto novembre). */
+export function sessionsBetween(from: string, to: string, labels: string[] = SERVICE_LABELS, now: Date = new Date()): string[] {
+  const out: string[] = [];
+  const re = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const a = from.match(re), b = to.match(re);
+  if (!a || !b || from > to) return out;
+  const d = new Date(Number(a[1]), Number(a[2]) - 1, Number(a[3]));
+  const end = new Date(Number(b[1]), Number(b[2]) - 1, Number(b[3]));
+  const oggi = dateKey(now);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  for (let i = 0; d <= end && i < 400; i++, d.setDate(d.getDate() + 1)) {
+    const k = dateKey(d);
+    if (k < oggi) continue;
+    for (const def of SCHEDULE[d.getDay()] ?? []) {
+      if (!labels.includes(def.label)) continue;
+      if (k === oggi && nowMin >= endToMin(def.end)) continue;
+      out.push(`${k}-${def.label}`);
+    }
+  }
+  return out;
+}
+
+/** "2026-11-10-Cena" → "Mar 10/11 · Cena" (chiave non valida: restituita com'è). */
+export function formatServiceKey(serviceKey: string): string {
+  const m = serviceKey.match(/^(\d{4})-(\d{2})-(\d{2})-(.+)$/);
+  if (!m) return serviceKey;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1} · ${m[4]}`;
+}
+
+/** Il servizio è di un giorno precedente a oggi? */
+export const isPastServiceKey = (serviceKey: string, now: Date = new Date()): boolean =>
+  serviceKey.slice(0, 10) < dateKey(now);

@@ -84,6 +84,7 @@ async function confirm(session: Stripe.Checkout.Session): Promise<void> {
       serviceKey: hold.serviceKey, name: hold.name, items: hold.items, patties: hold.patties,
       windowIndex: hold.windowIndex, readyMin: hold.readyMin, mode: hold.mode, pay: "online",
       total: hold.total, code, phone: hold.phone, channel: "prenotazione",
+      specials: hold.specials ?? {},   // id special → pezzi (statistiche special)
       status: "nuovo", createdAt: FieldValue.serverTimestamp(), stripeSessionId: session.id,
       ...(ricollocare ? { ricollocare: true } : {}),
     });

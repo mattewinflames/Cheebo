@@ -45,6 +45,21 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 
 ---
 
+## 2026-11-08
+
+### #71 — Special: patty per pezzo, periodi lunghi, statistiche dedicate
+**Tipo:** feature + fix · **Stato:** ✅ fatto (⚠️ deploy regole + script di correzione da lanciare)
+**File:** `src/lib/menu.ts`, `src/lib/schedule.ts`, `src/lib/analytics.ts`, `src/lib/orders.ts`, `src/pages/AdminCassa.tsx`, `api/nexi-webhook.ts`, `api/stripe-webhook.ts`, `firestore.rules`, `tests/rules.test.mjs`, `scripts/fix-special-patty.mjs`, test `menu`, `schedule-range`, `specials-stats`
+**Verifica:** tsc app ✓ · tsc api ✓ · 11 test nuovi ✓ (4 fallimenti preesistenti su overflow invariati) · build ✓ · controllo visivo desktop/mobile ✓ · ⚠️ rules test non rieseguito (emulatore)
+
+- **Patty per pezzo** (`special.patty`, default 1): un pezzo di special occupa N patty se la voce è da piastra. Unica funzione `specialPatty` per sito, cassa e server. Gli ordini già presi non cambiano da soli → `scripts/fix-special-patty.mjs` (anteprima / `--apply`, idempotente) aggiunge i patty mancanti a ordini e registro delle sessioni da oggi.
+- **Sessioni special**: "Aggiungi un periodo" (dal/al + Pranzo/Cena, segue gli orari del locale), griglia dei prossimi giorni, elenco leggibile con rimozione singola, sessioni passate tolte al salvataggio. Ordine cronologico Pranzo→Cena (`compareServiceKeys`).
+- **Statistiche**: importi sulle barre (fino a 10 giorni) ed etichette dei giorni; nuova sezione **Special** con il più venduto (pari merito gestito), servizi, media per servizio, servizio migliore, incasso stimato al prezzo attuale.
+- **Ordini**: salvano `specials` (id → pezzi) dai webhook e dalla cassa (con ripiego se le regole non sono aggiornate). Lo storico precedente si riconosce dall'etichetta (= nome dello special).
+
+**Perché:** Big Bruce ha due patty ma la piastra ne contava uno (sottostima fino a 50 patty a servizio); lo special dura tutto novembre e la selezione era limitata a 7 giorni; richiesta di una classifica degli special.
+**Nota:** a fine periodo lo special va disattivato, non eliminato, per restare nelle statistiche degli ordini vecchi.
+
 ## 2026-11-03
 
 ### #70 — Gerarchia admin: schede raggruppate, Disponibilità, Impostazioni

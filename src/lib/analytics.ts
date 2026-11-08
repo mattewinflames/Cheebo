@@ -392,3 +392,66 @@ export function computeAnalytics(
     trend,
   };
 }
+
+/* ─────────────────────────────── SPECIAL ─────────────────────────────────── */
+
+export interface SpecialRef { id: string; name: string; price: number; veg?: boolean }
+export interface SpecialStat {
+  id: string; name: string; veg?: boolean;
+  qty: number;                 // pezzi venduti nel periodo
+  servizi: number;             // servizi in cui ne è stato venduto almeno uno
+  mediaServizio: number;       // pezzi per servizio (sui servizi con vendite)
+  best?: { serviceKey: string; qty: number };   // servizio con più pezzi
+  incassoStimato: number;      // pezzi × prezzo ATTUALE (gli ordini non salvano il prezzo di riga)
+  pct: number;                 // quota sul totale special del periodo
+}
+
+/**
+ * Pezzi di special venduti per voce.
+ * · Ordini nuovi: campo `specials` (id → pezzi), esatto.
+ * · Ordini precedenti: riconosciuti dall'etichetta, che per uno special è il
+ *   nome della voce (es. "Big Bruce", "2× Big Bruce"). Funziona finché la voce
+ *   esiste nel menu con quel nome: a fine periodo va DISATTIVATA, non eliminata.
+ */
+export function computeSpecialStats(orders: Order[], specials: SpecialRef[]): SpecialStat[] {
+  const byName = new Map(specials.map((s) => [s.name.trim().toLowerCase(), s]));
+  const byId = new Map(specials.map((s) => [s.id, s]));
+  const perId = new Map<string, Map<string, number>>();   // id → serviceKey → pezzi
+  const add = (id: string, sk: string, q: number) => {
+    if (!(q > 0)) return;
+    const m = perId.get(id) ?? new Map<string, number>();
+    m.set(sk, (m.get(sk) ?? 0) + q);
+    perId.set(id, m);
+  };
+
+  for (const o of orders) {
+    if (!isValidAnalyticsOrder(o)) continue;
+    if (o.specials && typeof o.specials === "object") {
+      for (const [id, q] of Object.entries(o.specials)) add(id, o.serviceKey, Number(q));
+      continue;
+    }
+    for (const raw of o.items ?? []) {
+      const m = raw.match(QTY_RE);
+      const qty = m ? parseInt(m[1], 10) : 1;
+      const nome = (m ? raw.slice(m[0].length) : raw).trim().toLowerCase();
+      const sp = byName.get(nome);
+      if (sp) add(sp.id, o.serviceKey, qty);
+    }
+  }
+
+  const totale = [...perId.values()].reduce((s, m) => s + [...m.values()].reduce((a, b) => a + b, 0), 0);
+  const out: SpecialStat[] = [];
+  for (const [id, m] of perId) {
+    const ref = byId.get(id);
+    const qty = [...m.values()].reduce((a, b) => a + b, 0);
+    const [bestKey, bestQty] = [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] ?? [];
+    out.push({
+      id, name: ref?.name ?? id, veg: ref?.veg,
+      qty, servizi: m.size, mediaServizio: m.size ? qty / m.size : 0,
+      best: bestKey ? { serviceKey: bestKey, qty: bestQty } : undefined,
+      incassoStimato: qty * (ref?.price ?? 0),
+      pct: totale ? qty / totale : 0,
+    });
+  }
+  return out.sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
+}

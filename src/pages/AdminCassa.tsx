@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { auth } from "../lib/firebase";
-import { upcomingSessions, resolveService, dateKey, minWindowNow, type UpcomingSession } from "../lib/schedule";
+import { upcomingSessions, resolveService, dateKey, minWindowNow, sessionsBetween, formatServiceKey, isPastServiceKey, compareServiceKeys, SERVICE_LABELS, type UpcomingSession } from "../lib/schedule";
 import { CAP, totalWindows, windowStartMin, windowEndMin, planFirst, fmt, type Service } from "../lib/dispatch";
 import { subscribeOrders, subscribeLedger, subscribeHoldsConfirmed, setStatus, submitBooking, type Order, type OrderStatus, type PayMethod, type Tender } from "../lib/orders";
 import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore";
 import { fetchOrdersRange, buildRows, summarize, downloadCSV, downloadXLSX } from "../lib/export";
-import { computeAnalytics, prevPeriod, addDays, localISODate, type Analytics } from "../lib/analytics";
+import { computeAnalytics, computeSpecialStats, prevPeriod, addDays, localISODate, type Analytics, type SpecialStat } from "../lib/analytics";
 import { euro, isPanino, occupiesGriddle, FORMATS, ingredientsOf, menuDrinkSurcharge, griddlePatty, cartLineOf, cartPrice, cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, specialLeft, type FormatId, type CartType, type CartLine, type MenuItem, type MenuType, type PaninoConfig } from "../lib/menu";
 import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings, BarChart2, Lock, CalendarClock, Power } from "lucide-react";
 import { subscribeSettings, saveSettings, saveBlockedWindows, blockedWindowsOf, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
@@ -1808,6 +1808,62 @@ function RankedList({ title, items, color }: { title: string; items: { name: str
   );
 }
 
+/* Classifica degli special nel periodo: chi ha venduto di più, in quanti
+   servizi, il servizio migliore. L'incasso è stimato al prezzo attuale perché
+   gli ordini salvano le etichette, non il prezzo di ogni riga. */
+function SpecialStatsCard({ stats }: { stats: SpecialStat[] }) {
+  const max = stats[0]?.qty ?? 1;
+  const top = stats[0];
+  const pari = top ? stats.filter((s) => s.qty === top.qty) : [];
+  return (
+    <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ color: C.amber }}>★</span> Special
+      </div>
+      {!top ? (
+        <div style={{ color: C.muted, fontSize: 13 }}>Nessuno special venduto nel periodo.</div>
+      ) : (
+        <>
+          <div style={{ background: C.amberBg, border: "1px solid #F0D9AE", borderRadius: 10, padding: "12px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 26, lineHeight: 1 }} aria-hidden="true">🏆</span>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#8A5B12", textTransform: "uppercase", letterSpacing: 0.6 }}>{pari.length > 1 ? "Pari merito" : "Lo special più venduto"}</div>
+              <div className="arch" style={{ fontWeight: 800, fontSize: 19, color: C.ink, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                {pari.map((p, i) => <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{i > 0 && <span style={{ color: C.muted, fontWeight: 600 }}>e</span>}{p.name}{p.veg && <Leaf size={14} color={C.veg} />}</span>)}
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="arch" style={{ fontWeight: 800, fontSize: 24, color: C.blue, lineHeight: 1 }}>{top.qty}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>pezzi{pari.length > 1 ? " ciascuno" : stats.length > 1 ? ` · ${Math.round(top.pct * 100)}% degli special` : ""}</div>
+            </div>
+          </div>
+          {stats.map((sp, i) => (
+            <div key={sp.id} style={{ padding: "8px 0", borderTop: i ? `1px solid ${C.line}` : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, color: C.muted, width: 14, textAlign: "right" }}>{i + 1}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sp.name}</span>{sp.veg && <Leaf size={12} color={C.veg} style={{ flexShrink: 0 }} />}
+                </span>
+                <MiniBar value={sp.qty} max={max} color={C.amber} />
+                <span style={{ fontSize: 13, fontWeight: 700, width: 34, textAlign: "right" }}>{sp.qty}</span>
+              </div>
+              <div style={{ fontSize: 11.5, color: C.muted, margin: "3px 0 0 22px", lineHeight: 1.5 }}>
+                {sp.servizi} serviz{sp.servizi === 1 ? "io" : "i"} · {sp.mediaServizio.toFixed(1).replace(".", ",")} per servizio
+                {sp.best && sp.servizi > 1 && <> · migliore: <b style={{ color: C.ink }}>{formatServiceKey(sp.best.serviceKey)}</b> ({sp.best.qty})</>}
+                {" "}· ≈ {euro(sp.incassoStimato)}
+              </div>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.45 }}>
+            "Per servizio" conta i servizi con almeno una vendita. L'incasso (≈) è stimato al prezzo attuale.
+            A fine periodo disattiva lo special invece di eliminarlo, così resta nelle statistiche.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function StatisticheSection() {
   const oggi = localISODate(new Date());
   const [preset, setPreset] = useState<"oggi" | "7g" | "30g" | "90g" | "custom">("7g");
@@ -1842,6 +1898,14 @@ function StatisticheSection() {
   const stats: Analytics = useMemo(
     () => computeAnalytics(orders, prevOrders, from, to),
     [orders, prevOrders, from, to],
+  );
+
+  // Special: tutte le voci di menu con configurazione special, anche disattivate
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  useEffect(() => subscribeMenu(setMenuItems, false), []);
+  const specialStats: SpecialStat[] = useMemo(
+    () => computeSpecialStats(orders, menuItems.filter((m) => m.special).map((m) => ({ id: m.id, name: m.name, price: m.solo ?? 0, veg: m.veg }))),
+    [orders, menuItems],
   );
 
   const dateInp: React.CSSProperties = { ...inp, padding: "8px 10px", fontSize: 13 };
@@ -1900,25 +1964,40 @@ function StatisticheSection() {
         {/* ── Trend ── */}
         <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, marginBottom: 16, position: "relative" }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>Andamento incassi</div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 100, position: "relative" }}>
-            {stats.trend.map(d => {
-              const h = maxFat > 0 ? Math.round((d.fat / maxFat) * 100) : 0;
-              return (
-                <div key={d.date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end", cursor: "pointer" }}
-                  onMouseEnter={e => setTooltip({ day: d, x: e.clientX, y: e.clientY })}
-                  onMouseLeave={() => setTooltip(null)}>
-                  <div style={{ width: "100%", minWidth: 3, height: `${h}%`, minHeight: d.fat > 0 ? 3 : 0,
-                    background: d.fat > 0 ? C.blue : C.line, borderRadius: "3px 3px 0 0",
-                    opacity: tooltip?.day.date === d.date ? 0.7 : 1 }} />
+          {(() => {
+            const n = stats.trend.length;
+            const conValori = n <= 10;                       // fino a 10 giorni: importo su ogni barra (oltre, sul passaggio del mouse)
+            const passo = n <= 7 ? 1 : Math.ceil(n / 7);      // etichette giorno: tutte, o ~7 distribuite
+            const breve = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1).replace(".", ",")}k€` : `${Math.round(v)}€`;
+            return (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: conValori ? 122 : 100, position: "relative" }}>
+                  {stats.trend.map(d => {
+                    const h = maxFat > 0 ? Math.round((d.fat / maxFat) * 100) : 0;
+                    return (
+                      <div key={d.date} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end", cursor: "pointer" }}
+                        onMouseEnter={e => setTooltip({ day: d, x: e.clientX, y: e.clientY })}
+                        onMouseLeave={() => setTooltip(null)}>
+                        {conValori && d.fat > 0 && (
+                          <span className="trend-val" style={{ fontSize: 10.5, fontWeight: 700, color: C.ink, marginBottom: 3, whiteSpace: "nowrap" }}>{breve(d.fat)}</span>
+                        )}
+                        <div style={{ width: "100%", minWidth: 3, height: h, minHeight: d.fat > 0 ? 3 : 0,
+                          background: d.fat > 0 ? C.blue : C.line, borderRadius: "3px 3px 0 0",
+                          opacity: tooltip?.day.date === d.date ? 0.7 : 1 }} />
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-          {/* Etichette date: solo primo e ultimo */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <span style={{ fontSize: 11, color: C.muted }}>{stats.trend[0]?.label}</span>
-            <span style={{ fontSize: 11, color: C.muted }}>{stats.trend[stats.trend.length - 1]?.label}</span>
-          </div>
+                <div style={{ display: "flex", gap: 2, marginTop: 6 }}>
+                  {stats.trend.map((d, i) => (
+                    <span key={d.date} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 10.5, color: C.muted, whiteSpace: "nowrap", overflow: "visible" }}>
+                      {i % passo === 0 || i === n - 1 ? d.label : ""}
+                    </span>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
           {/* Tooltip */}
           {tooltip && (
             <div style={{ position: "fixed", top: tooltip.y - 110, left: tooltip.x - 80, zIndex: 999,
@@ -1936,6 +2015,8 @@ function StatisticheSection() {
         <div style={{ marginBottom: 14 }}>
           <RankedList title="🍔 Panini più venduti" items={stats.topPanini} color={C.blue} />
         </div>
+
+        <SpecialStatsCard stats={specialStats} />
 
         <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
@@ -2189,7 +2270,7 @@ function Money({ label, value, color, big }: { label: string; value: number; col
 
 /* ---------------- MENU ---------------- */
 type EditItem = MenuItem & { allergStr?: string; _new?: boolean };
-type SpecialDraft = { serviceKeys: string[]; stock: number };
+type SpecialDraft = { serviceKeys: string[]; stock: number; patty?: number };
 function MenuSection() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [editing, setEditing] = useState<EditItem | null>(null);
@@ -2205,6 +2286,9 @@ function MenuSection() {
     const base = { ...rest } as MenuItem;
     if (isPanino(e.type)) base.allergens = (allergStr ?? "").split(",").map((s) => Number(s.trim())).filter((x) => !Number.isNaN(x));
     else delete base.griddle; // il flag piastra non ha senso su sides/dolci/drink
+    // special: le sessioni dei giorni passati non servono più (le statistiche
+    // leggono gli ordini, non questo elenco) → si tolgono al salvataggio
+    if (base.special) base.special = { ...base.special, serviceKeys: [...new Set(base.special.serviceKeys)].filter((k) => !isPastServiceKey(k)).sort(compareServiceKeys) };
     await saveItem(base);
     setEditing(null);
   };
@@ -2269,6 +2353,143 @@ function mancanzeVoce(item: EditItem): string[] {
   return m;
 }
 
+/* ----------------------------------------------------------------------------
+   Configurazione di uno special: pezzi e patty per pezzo, sessioni in cui è
+   attivo. Le sessioni si aggiungono per PERIODO (dal/al + servizi, per special
+   che durano settimane) o singolarmente nella griglia dei prossimi giorni.
+   Le sessioni di giorni passati non si mostrano e si tolgono al salvataggio.
+   ---------------------------------------------------------------------------- */
+function SpecialEditor({ special, griddle, sessioni, onChange }: {
+  special: SpecialDraft; griddle: boolean; sessioni: UpcomingSession[];
+  onChange: (sp: SpecialDraft) => void;
+}) {
+  const oggi = dateKey(new Date());
+  const fineMese = (() => { const d = new Date(); return dateKey(new Date(d.getFullYear(), d.getMonth() + 1, 0)); })();
+  const [dal, setDal] = useState(oggi);
+  const [al, setAl] = useState(fineMese);
+  const [servizi, setServizi] = useState<string[]>(SERVICE_LABELS);
+  const [elencoAperto, setElencoAperto] = useState(false);
+
+  const keys = [...new Set(special.serviceKeys)];
+  const future = keys.filter((k) => !isPastServiceKey(k)).sort(compareServiceKeys);
+  const passate = keys.length - future.length;
+  const periodo = sessionsBetween(dal, al, servizi);
+  const nuove = periodo.filter((k) => !keys.includes(k));
+  const setKeys = (ks: string[]) => onChange({ ...special, serviceKeys: [...new Set(ks)].sort(compareServiceKeys) });
+  const toggle = (k: string) => setKeys(keys.includes(k) ? keys.filter((x) => x !== k) : [...keys, k]);
+
+  // elenco raggruppato per giorno: "Mar 10/11" → ["Pranzo", "Cena"]
+  const perGiorno = future.reduce((acc, k) => {
+    const [giorno, servizio] = formatServiceKey(k).split(" · ");
+    (acc[giorno] ??= []).push({ k, servizio });
+    return acc;
+  }, {} as Record<string, { k: string; servizio: string }[]>);
+
+  const lbl: React.CSSProperties = { fontSize: 11.5, color: C.muted, marginBottom: 4 };
+  const dateInp: React.CSSProperties = { ...inp, padding: "8px 10px", fontSize: 13 };
+  const chip = (on: boolean): React.CSSProperties => ({ cursor: "pointer", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600,
+    background: on ? C.blue : C.bg, color: on ? "#fff" : C.ink, border: `1px solid ${on ? C.blue : C.line}` });
+
+  return (
+    <div style={{ marginTop: 14, background: "#FFF6E9", border: "1px solid #F2D9AE", borderRadius: 10, padding: "12px 14px" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.1, textTransform: "uppercase", color: "#8A5B12", marginBottom: 10 }}>★ Configurazione special</div>
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <label style={{ flex: "0 0 130px" }}>
+          <div style={lbl}>Pezzi per sessione</div>
+          <input type="number" min={1} max={200} value={special.stock}
+            onChange={(e) => onChange({ ...special, stock: Math.max(1, Math.min(200, Number(e.target.value) || 1)) })} style={inp} />
+        </label>
+        <label style={{ flex: "0 0 130px" }}>
+          <div style={lbl}>Patty per pezzo</div>
+          <input type="number" min={1} max={5} value={special.patty ?? 1} disabled={!griddle}
+            onChange={(e) => onChange({ ...special, patty: Math.max(1, Math.min(5, Math.round(Number(e.target.value)) || 1)) })}
+            style={{ ...inp, opacity: griddle ? 1 : 0.5 }} />
+        </label>
+        <div style={{ flex: "1 1 200px", fontSize: 11.5, color: "#8A5B12", lineHeight: 1.45, alignSelf: "flex-end", paddingBottom: 4 }}>
+          {griddle
+            ? <>Ogni pezzo occupa <b>{special.patty ?? 1} patty</b> sulla piastra (es. 2 per un panino con doppio patty).</>
+            : <>La voce non è "da piastra": non occupa patty.</>}
+        </div>
+      </div>
+
+      {/* Aggiungi per periodo */}
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #F2D9AE" }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink, marginBottom: 8 }}>Aggiungi un periodo</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <label><div style={lbl}>Dal</div><input type="date" value={dal} min={oggi} onChange={(e) => setDal(e.target.value)} style={dateInp} /></label>
+          <label><div style={lbl}>Al</div><input type="date" value={al} min={dal} onChange={(e) => setAl(e.target.value)} style={dateInp} /></label>
+          <div style={{ display: "flex", gap: 6 }}>
+            {SERVICE_LABELS.map((l) => {
+              const on = servizi.includes(l);
+              return <button key={l} type="button" aria-pressed={on} onClick={() => setServizi(on ? servizi.filter((x) => x !== l) : [...servizi, l])} style={chip(on)}>{l}</button>;
+            })}
+          </div>
+          <button type="button" disabled={nuove.length === 0} onClick={() => setKeys([...keys, ...nuove])}
+            style={{ ...btn("primary"), padding: "8px 14px", fontSize: 13, opacity: nuove.length ? 1 : 0.5 }}>
+            {nuove.length ? `Aggiungi ${nuove.length} session${nuove.length === 1 ? "e" : "i"}` : periodo.length ? "Già tutte selezionate" : "Nessuna sessione"}
+          </button>
+        </div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>Segue gli orari del locale (lunedì chiuso, pranzo solo da martedì a venerdì).</div>
+      </div>
+
+      {/* Prossimi giorni: selezione singola */}
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #F2D9AE" }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink, marginBottom: 8 }}>Prossimi giorni</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {Object.entries(sessioni.reduce((acc, sess) => { (acc[sess.dayLabel] ??= []).push(sess); return acc; }, {} as Record<string, UpcomingSession[]>))
+            .map(([giorno, delGiorno]) => (
+              <div key={giorno} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 74, flexShrink: 0, fontSize: 12, fontWeight: 700, color: C.ink }}>{giorno}</span>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {delGiorno.map((sess) => (
+                    <button key={sess.serviceKey} type="button" title={sess.serviceKey} onClick={() => toggle(sess.serviceKey)} style={chip(keys.includes(sess.serviceKey))}>{sess.label}</button>
+                  ))}
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+
+      {/* Riepilogo */}
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #F2D9AE", fontSize: 12.5, color: "#8A5B12", lineHeight: 1.5 }}>
+        {future.length === 0
+          ? <b>Nessuna sessione selezionata: lo special non comparirà.</b>
+          : <>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span>Attivo in <b>{future.length} session{future.length === 1 ? "e" : "i"}</b>, da <b>{formatServiceKey(future[0])}</b> a <b>{formatServiceKey(future[future.length - 1])}</b>.</span>
+                <button type="button" onClick={() => setElencoAperto((o) => !o)} style={{ background: "none", border: "none", color: C.blue, fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
+                  {elencoAperto ? "Nascondi elenco" : "Mostra elenco"}
+                </button>
+                <button type="button" onClick={() => setKeys([])} style={{ background: "none", border: "none", color: C.danger, fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>Togli tutte</button>
+              </div>
+              {elencoAperto && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 8, maxHeight: 220, overflowY: "auto", background: "#fff", border: "1px solid #F2D9AE", borderRadius: 8, padding: "8px 10px" }}>
+                  {Object.entries(perGiorno).map(([giorno, voci]) => (
+                    <div key={giorno} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 74, flexShrink: 0, fontWeight: 700, color: C.ink, fontSize: 12 }}>{giorno}</span>
+                      {voci.map(({ k, servizio }) => (
+                        <button key={k} type="button" onClick={() => toggle(k)} title="Togli questa sessione"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 6, padding: "3px 8px", fontSize: 12, color: C.ink, cursor: "pointer" }}>
+                          {servizio} <X size={11} color={C.muted} />
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>}
+        {passate > 0 && (
+          <div style={{ marginTop: 6, color: C.muted }}>
+            {passate} session{passate === 1 ? "e passata" : "i passate"}: {passate === 1 ? "verrà tolta" : "verranno tolte"} al salvataggio.
+          </div>
+        )}
+        <div style={{ marginTop: 6 }}>I pezzi valgono <b>per singola sessione</b>: ogni servizio riparte dal numero indicato. Finito lo stock, lo special appare "esaurito".</div>
+      </div>
+    </div>
+  );
+}
+
 function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
   item: EditItem; onChange: (e: EditItem) => void; onSave: (e: EditItem) => void;
   onCancel: () => void; onDelete?: () => void;
@@ -2325,56 +2546,8 @@ function EditForm({ item, onChange, onSave, onCancel, onDelete, sessioni }: {
       </div>
 
       {item.special && (
-        <div style={{ marginTop: 14, background: "#FFF6E9", border: "1px solid #F2D9AE", borderRadius: 10, padding: "12px 14px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.1, textTransform: "uppercase", color: "#8A5B12", marginBottom: 9 }}>★ Configurazione special</div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <label style={{ flex: "0 0 120px" }}>
-              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 4 }}>Pezzi per sessione</div>
-              <input type="number" min={1} max={200} value={item.special.stock}
-                onChange={(e) => set("special", { ...item.special!, stock: Math.max(1, Math.min(200, Number(e.target.value) || 1)) })}
-                style={inp} />
-            </label>
-            <div style={{ flex: "1 1 300px" }}>
-              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 6 }}>Attivo in queste sessioni</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 190, overflowY: "auto" }}>
-                {Object.entries(sessioni.reduce((acc, sess) => {
-                  (acc[sess.dayLabel] ??= []).push(sess);
-                  return acc;
-                }, {} as Record<string, UpcomingSession[]>)).map(([giorno, delGiorno]) => (
-                  <div key={giorno} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 74, flexShrink: 0, fontSize: 12, fontWeight: 700, color: C.ink }}>{giorno}</span>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {delGiorno.map((sess) => {
-                        const on = item.special!.serviceKeys.includes(sess.serviceKey);
-                        return (
-                          <button key={sess.serviceKey} title={sess.serviceKey} onClick={() => set("special", {
-                              ...item.special!,
-                              serviceKeys: on ? item.special!.serviceKeys.filter((k) => k !== sess.serviceKey)
-                                              : [...item.special!.serviceKeys, sess.serviceKey],
-                            })}
-                            style={{ cursor: "pointer", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600,
-                                     background: on ? C.blue : C.bg, color: on ? "#fff" : C.ink, border: `1px solid ${on ? C.blue : C.line}` }}>
-                            {sess.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: 11.5, color: "#8A5B12", marginTop: 10, lineHeight: 1.45 }}>
-            I pezzi valgono <b>per singola sessione</b>: ogni servizio riparte dal numero indicato.
-            Finito lo stock, lo special appare "esaurito" e non è più ordinabile.
-            {item.special.serviceKeys.length === 0
-              ? <><br /><b>Nessuna sessione selezionata: lo special non comparirà.</b></>
-              : <><br />Selezionate: <b>{item.special.serviceKeys.map((k) => {
-                    const sx = sessioni.find((x) => x.serviceKey === k);
-                    return sx ? `${sx.dayLabel} · ${sx.label.toLowerCase()}` : k;
-                  }).join(" — ")}</b></>}
-          </div>
-        </div>
+        <SpecialEditor special={item.special} griddle={!!item.griddle} sessioni={sessioni}
+          onChange={(sp) => set("special", sp)} />
       )}
       {provato && mancano.length > 0 && (
         <div style={{ marginTop: 14, background: "#FFF4F0", border: `1px solid #F3C9BC`, color: C.redline, borderRadius: 10, padding: "10px 13px", fontSize: 12.5, lineHeight: 1.45 }}>
