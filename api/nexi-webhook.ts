@@ -20,7 +20,7 @@
    ========================================================================== */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, FieldValue } from "./_lib/admin.js";
-import { HOLDS, SESSIONS, ORDERS, type Hold } from "./_lib/holds.js";
+import { HOLDS, SESSIONS, ORDERS, reoccupyPatch, type Hold } from "./_lib/holds.js";
 import { serviceFromKey } from "../src/lib/schedule.js";
 import { totalWindows, ledgerFromMap, ledgerToMap, ledgerToMapDense } from "../src/lib/dispatch.js";
 
@@ -130,7 +130,8 @@ async function confirm(holdId: string, nexiOperationId: string): Promise<void> {
       nexiOperationId,
       ...(ricollocare ? { ricollocare: true } : {}),
     });
-    tx.set(sessRef, { seq: code, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    // pagato dopo il rilascio: le celle erano state restituite → si rioccupano
+    tx.set(sessRef, { seq: code, updatedAt: FieldValue.serverTimestamp(), ...(ricollocare ? reoccupyPatch(hold) : {}) }, { merge: true });
     tx.update(holdRef, {
       status: "pagato", orderId: orderRef.id, code,
       paidAt: FieldValue.serverTimestamp(),

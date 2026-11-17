@@ -27,6 +27,40 @@ const endToMin = (end: string): number => (end === "24:00" ? 1440 : toMin(end));
 export const dateKey = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
+/* ----------------------------------------------------------------------------
+   ORA DI ROMA. Tutte le funzioni di questo file leggono l'ora con i getter
+   "locali" (getHours, getDay, …). Nel browser del cliente il fuso è già Roma,
+   ma il server Vercel gira in UTC: lì getHours() è 1 ora indietro (2 con l'ora
+   legale) e le fasce già passate risultavano ancora prenotabili.
+   romeNow() restituisce una Date i cui getter locali danno l'ora di Roma, su
+   qualunque macchina: va passata a queste funzioni lato server.
+   ---------------------------------------------------------------------------- */
+const ROME_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+});
+export function romeNow(at: Date = new Date()): Date {
+  const p: Record<string, number> = {};
+  for (const { type, value } of ROME_FMT.formatToParts(at)) if (type !== "literal") p[type] = Number(value);
+  return new Date(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+}
+
+/** Pausa "solo prenotazioni fuori orario": true se ADESSO (ora di Roma) il
+ *  locale è aperto secondo gli orari impostati in admin. Stessa regola per il
+ *  sito (avviso al cliente) e per il server (che rifiuta la prenotazione). */
+export function isOnlyClosedPause(
+  s: { onlyClosedBooking?: boolean; onlyClosedSchedule?: Record<number, { start: string; end: string }[]> },
+  now: Date = romeNow(),
+): { paused: false } | { paused: true; until: string } {
+  if (!s.onlyClosedBooking) return { paused: false };
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  for (const svc of s.onlyClosedSchedule?.[now.getDay()] ?? []) {
+    if (typeof svc?.start !== "string" || typeof svc?.end !== "string") continue;
+    if (nowMin >= toMin(svc.start) && nowMin < endToMin(svc.end)) return { paused: true, until: svc.end };
+  }
+  return { paused: false };
+}
+
 /** Prima finestra ancora utile "adesso" per una sessione: 0 se non è oggi o se
  *  il servizio non è ancora iniziato; altrimenti scarta le finestre già trascorse
  *  (il cibo non si cuoce nel passato). Serve a planFirst/planAt come `minWindow`. */

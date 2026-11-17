@@ -14,7 +14,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type Stripe from "stripe";
 import { adminDb, FieldValue } from "./_lib/admin.js";
 import { stripe } from "./_lib/stripe.js";
-import { HOLDS, SESSIONS, ORDERS, type Hold } from "./_lib/holds.js";
+import { HOLDS, SESSIONS, ORDERS, reoccupyPatch, type Hold } from "./_lib/holds.js";
 import { serviceFromKey } from "../src/lib/schedule.js";
 import { totalWindows, ledgerFromMap, ledgerToMap, ledgerToMapDense } from "../src/lib/dispatch.js";
 
@@ -82,13 +82,14 @@ async function confirm(session: Stripe.Checkout.Session): Promise<void> {
     const orderRef = adminDb.collection(ORDERS).doc();
     tx.set(orderRef, {
       serviceKey: hold.serviceKey, name: hold.name, items: hold.items, patties: hold.patties,
-      windowIndex: hold.windowIndex, readyMin: hold.readyMin, mode: hold.mode, pay: "online",
+      windowIndex: hold.windowIndex, readyMin: hold.readyMin, cells: hold.cells ?? [], mode: hold.mode, pay: "online",
       total: hold.total, code, phone: hold.phone, channel: "prenotazione",
       specials: hold.specials ?? {},   // id special → pezzi (statistiche special)
       status: "nuovo", createdAt: FieldValue.serverTimestamp(), stripeSessionId: session.id,
       ...(ricollocare ? { ricollocare: true } : {}),
     });
-    tx.set(sessRef, { seq: code, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    // pagato dopo il rilascio: le celle erano state restituite → si rioccupano
+    tx.set(sessRef, { seq: code, updatedAt: FieldValue.serverTimestamp(), ...(ricollocare ? reoccupyPatch(hold) : {}) }, { merge: true });
     tx.update(holdRef, { status: "pagato", orderId: orderRef.id, code, paidAt: FieldValue.serverTimestamp() });
   });
 }

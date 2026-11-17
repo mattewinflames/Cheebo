@@ -11,7 +11,7 @@
    ========================================================================== */
 
 import {
-  EXTRA, isPanino, isSpecialActive, cartLineOf, specialCartLine,
+  EXTRA, isPanino, hasFormats, isSpecialActive, cartLineOf, specialCartLine,
   cartItemStrings, cartPatties, cartTotal, cartSpecials,
   type MenuItem, type CartLine, type PaninoConfig, type CartReq,
 } from "./menu.js";
@@ -81,7 +81,9 @@ export function resolveCart(menu: MenuItem[], serviceKey: string, cart: CartReqL
         .filter((e): e is NonNullable<typeof e> => e !== null);
       // swaps: solo gli id previsti dal panino (il filtro vero è dentro cartPrice via item.swaps)
       const swaps = (req.swaps ?? []).filter((id) => (item.swaps ?? []).some((s) => s.id === id));
-      const cfg: PaninoConfig = { item, format: req.format, type: req.type, drink, extras, removed: req.removed, swaps, sideChoice: req.sideChoice };
+      // formato unico (Burgers): si forza "singolo" qualunque cosa mandi il client
+      const format = hasFormats(item) ? req.format : "singolo";
+      const cfg: PaninoConfig = { item, format, type: req.type, drink, extras, removed: req.removed, swaps, sideChoice: req.sideChoice };
       lines.push({ ...cartLineOf(cfg), qty: q });
     }
   }

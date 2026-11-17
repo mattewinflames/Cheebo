@@ -29,6 +29,12 @@ export const EXTRA: ExtraItem[] = [
 // ---- Voce di menu (Firestore) ----
 export type MenuType = "smash" | "burger" | "side" | "dolce" | "drink" | "salsa";
 export const isPanino = (t: MenuType): boolean => t === "smash" || t === "burger";
+/** Il panino si vende in più formati (singolo/doppio/triplo)? Solo gli
+ *  smashburger: i Burgers (pollo fritto, pulled pork, tofu) hanno un formato
+ *  unico, come le voci con `singleFormatOnly`. Prima il sito mostrava il
+ *  selettore a tutti e si potevano ordinare "Chicken triplo" a +4€. */
+export const hasFormats = (item: { type: MenuType; singleFormatOnly?: boolean }): boolean =>
+  item.type === "smash" && !item.singleFormatOnly;
 
 export interface MenuItem {
   id: string;
@@ -202,7 +208,7 @@ export function cartKey(c: PaninoConfig): string {
 /** Etichetta leggibile in comanda. */
 export function cartLabel(c: PaninoConfig): string {
   const { ex, rm, sw } = sig(c);
-  let s = c.item.singleFormatOnly
+  let s = !hasFormats(c.item)
     ? c.item.name
     : `${c.item.name} ${FORMATS[c.format].label.toLowerCase()}`;
   if (c.type === "menu") {

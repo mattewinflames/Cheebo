@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { upcomingSessions, minWindowNow } from "../lib/schedule";
+import { upcomingSessions, minWindowNow, isOnlyClosedPause } from "../lib/schedule";
 import {
-  FORMATS, EXTRA, euro, ingredientsOf, menuDrinkSurcharge,
+  FORMATS, EXTRA, hasFormats, euro, ingredientsOf, menuDrinkSurcharge,
   cartKey, cartPrice, cartLineOf,
   cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, isSpecialActive, specialLeft, SPECIAL_LOW,
   type FormatId, type CartType, type CartLine, type MenuItem, type PaninoConfig, type CartReq,
@@ -33,9 +33,13 @@ export default function Prenotazioni() {
   const [cartOpen, setCartOpen] = useState(false);
 
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  // Orologio al minuto: orari passati, sessioni e pausa si aggiornano anche se
+  // la pagina resta aperta a lungo (prima si calcolavano solo all'apertura).
+  const [minuto, setMinuto] = useState(() => Math.floor(Date.now() / 60_000));
+  useEffect(() => { const id = setInterval(() => setMinuto(Math.floor(Date.now() / 60_000)), 15_000); return () => clearInterval(id); }, []);
   const sessions = useMemo(
     () => upcomingSessions(new Date(), undefined, { blocked: settings.bookingBlocked, closedDays: settings.closedDays }),
-    [settings.bookingBlocked, settings.closedDays],
+    [settings.bookingBlocked, settings.closedDays, minuto],
   );
   const [sessionKey, setSessionKey] = useState(sessions[0]?.serviceKey ?? "");
   const [ledger, setLedger] = useState<number[]>([]);
@@ -52,19 +56,8 @@ export default function Prenotazioni() {
   useEffect(() => subscribeSettings(setSettings), []);
 
   // Blocco prenotazioni durante l'orario di apertura (per-dow, per-servizio)
-  const bookingBlockedByHour = useMemo(() => {
-    if (!settings.onlyClosedBooking) return false;
-    const now = new Date();
-    const dow = now.getDay();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    const schedule = settings.onlyClosedSchedule ?? {};
-    const services = schedule[dow] ?? [];
-    return services.some((svc) => {
-      const [sh, sm] = svc.start.split(":").map(Number);
-      const [eh, em] = svc.end.split(":").map(Number);
-      return nowMin >= sh * 60 + sm && nowMin < eh * 60 + em;
-    });
-  }, [settings.onlyClosedBooking, settings.onlyClosedSchedule]);
+  const pausa = useMemo(() => isOnlyClosedPause(settings, new Date()), [settings.onlyClosedBooking, settings.onlyClosedSchedule, minuto]);
+  const bookingBlockedByHour = pausa.paused;
   // se la sessione scelta sparisce (giorno chiuso / blocco attivato), riallinea
   useEffect(() => {
     if (sessions.length && !sessions.some((s) => s.serviceKey === sessionKey)) {
@@ -132,12 +125,12 @@ export default function Prenotazioni() {
       out.push({ window: w, readyMin: windowEndMin(service, w), full: isBlocked || !cumulOk || !windowOk, blocked: isBlocked });
     }
     return out;
-  }, [effLedger, blocked, patties, service?.startMin, sessionKey]);
+  }, [effLedger, blocked, patties, service?.startMin, sessionKey, minuto]);
   const firstSlot = slots.find((s) => !s.full);
   // L'orario scelto è stato appena bloccato (o riempito): la scelta decade,
   // così il riepilogo non mostra un orario che il server non accetterebbe.
   useEffect(() => {
-    if (choice && choice !== "first" && slots.some((s) => s.window === choice.window && s.blocked)) setChoice(null);
+    if (choice && choice !== "first" && (!slots.some((s) => s.window === choice.window) || slots.some((s) => s.window === choice.window && s.blocked))) setChoice(null);
   }, [slots, choice]);
 
   const preview = useMemo(() => {
@@ -146,7 +139,7 @@ export default function Prenotazioni() {
     if (choice === "first" || choice === null) return planFirstOpen(ledger, patties, service, minW, blocked);
     const p = planAtOpen(ledger, patties, choice.window, service, minW, blocked);
     return p.ok ? p : planFirstOpen(ledger, patties, service, minW, blocked);
-  }, [choice, ledger, blocked, patties, service?.startMin, sessionKey]);
+  }, [choice, ledger, blocked, patties, service?.startMin, sessionKey, minuto]);
 
   const commit = async () => {
     if (!service || !session) return;
@@ -181,6 +174,8 @@ export default function Prenotazioni() {
         }
         if (res.itemId) setErr(res.left ? `Ne restano solo ${res.left}: riduci la quantità e riprova.` : "Lo special è appena andato esaurito.");
         else if (res.error === "piastra al completo") setErr("Per questo servizio la piastra è al completo. Prova un altro giorno.");
+        else if (res.error === "pausa fuori orario") setErr("Il locale è aperto: durante il servizio si ordina direttamente da noi. Riprova a negozio chiuso.");
+        else if (res.error === "sessione non prenotabile") setErr("Questo servizio non è più prenotabile. Scegli un altro orario.");
         else setErr(res.error || "Non è stato possibile avviare il pagamento. Riprova.");
         return;
       }
@@ -364,8 +359,8 @@ export default function Prenotazioni() {
               <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, textAlign: "center" }}>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Prenotazioni online non disponibili</div>
                 <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>
-                  Le prenotazioni online sono disponibili solo fuori dall'orario di apertura del locale.
-                  Passa direttamente da noi!
+                  Durante il servizio si ordina direttamente al locale.
+                  {pausa.paused && <> Le prenotazioni online riaprono alle <b>{pausa.until === "24:00" ? "00:00" : pausa.until}</b>.</>}
                 </div>
               </div>
             )}
@@ -727,14 +722,14 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty, esaurito }: {
   const [removed, setRemoved] = useState<string[]>([]);
   const [swaps, setSwaps] = useState<string[]>([]);
   const [sideChoice, setSideChoice] = useState<"normali" | "dolci">("normali");
-  const f = FORMATS[fmtId];
+  const f = FORMATS[hasFormats(item) ? fmtId : "singolo"];
   const ingredients = ingredientsOf(item);
   // bibita compresa: la prima senza sovrapprezzo, altrimenti la prima disponibile
   const drink = drinks.find((d) => d.id === drinkId)
              ?? drinks.find((d) => menuDrinkSurcharge(d) === 0)
              ?? drinks[0];
   const cfg: PaninoConfig = {
-    item, format: fmtId, type, drink,
+    item, format: hasFormats(item) ? fmtId : "singolo", type, drink,
     extras: EXTRA.map((e) => ({ ...e, q: ex[e.id] || 0 })).filter((e) => e.q > 0),
     removed, swaps, sideChoice,
   };
@@ -807,8 +802,8 @@ function BurgerCard({ item, drinks, cart, onAdd, bare, maxQty, esaurito }: {
             </div>
             <div style={{ overflowY: "auto", padding: "8px 20px 14px", flex: 1 }}>
               {/* 1 · che prodotto è: formato (= patty) e tipo, vicini */}
-              <Label>Formato</Label>
-              <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>{(Object.keys(FORMATS) as FormatId[]).map((id) => <button key={id} onClick={() => setFmtId(id)} style={chip(fmtId === id)}>{FORMATS[id].label}{FORMATS[id].surcharge ? <span style={{ opacity: 0.7 }}> +{FORMATS[id].surcharge}</span> : null}</button>)}</div>
+              {hasFormats(item) && <Label>Formato</Label>}
+              {hasFormats(item) && <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>{(Object.keys(FORMATS) as FormatId[]).map((id) => <button key={id} onClick={() => setFmtId(id)} style={chip(fmtId === id)}>{FORMATS[id].label}{FORMATS[id].surcharge ? <span style={{ opacity: 0.7 }}> +{FORMATS[id].surcharge}</span> : null}</button>)}</div>}
               <Label>Tipo</Label>
               <div style={{ display: "flex", gap: 7 }}>
                 <button onClick={() => setType("panino")} style={chip(type === "panino")}>Solo panino</button>

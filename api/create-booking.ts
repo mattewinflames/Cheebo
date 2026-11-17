@@ -14,7 +14,7 @@ import { adminDb, FieldValue, Timestamp } from "./_lib/admin.js";
 import { createHppOrder } from "./_lib/nexi.js";
 import { HOLD_MINUTES, HOLDS, SESSIONS, MENU, isStaleHold, type Hold } from "./_lib/holds.js";
 import { resolveCart, isResolveError, type BookingReq } from "../src/lib/booking.js";
-import { serviceFromKey, upcomingSessions, minWindowNow } from "../src/lib/schedule.js";
+import { serviceFromKey, upcomingSessions, minWindowNow, romeNow, isOnlyClosedPause } from "../src/lib/schedule.js";
 import { totalWindows, planFirstOpen, planAtOpen, ledgerFromMap, ledgerToMapDense, WINDOW_MIN, type Placement } from "../src/lib/dispatch.js";
 import type { MenuItem } from "../src/lib/menu.js";
 
@@ -34,11 +34,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!service) return res.status(400).json({ error: "sessione inesistente" });
 
   // Autorità sul tempo e sulle chiusure (#47/#50).
-  const now = new Date();
+  // Ora di ROMA: il server gira in UTC e con new Date() le fasce già passate
+  // risultavano ancora prenotabili (ordini delle 19:52 con ritiro alle 19:40).
+  const now = romeNow();
   const settingsSnap = await adminDb.collection("settings").doc("app").get();
   const settings = settingsSnap.data() ?? {};
   if (settings.bookingBlocked === true)
     return res.status(409).json({ error: "prenotazioni sospese" });
+  // "Solo prenotazioni fuori orario": prima la verificava solo la pagina, una
+  // volta all'apertura; chi l'aveva aperta prima del servizio prenotava lo stesso.
+  const pausa = isOnlyClosedPause(settings as Parameters<typeof isOnlyClosedPause>[0], now);
+  if (pausa.paused)
+    return res.status(409).json({ error: "pausa fuori orario", until: pausa.until });
   const closedDays = Array.isArray(settings.closedDays) ? (settings.closedDays as string[]) : [];
   const prenotabili = upcomingSessions(now, undefined, { closedDays });
   if (!prenotabili.some((u) => u.serviceKey === serviceKey))

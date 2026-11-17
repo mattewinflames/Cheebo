@@ -7,7 +7,7 @@ import { subscribeOrders, subscribeLedger, subscribeHoldsConfirmed, setStatus, s
 import { subscribeMenu, saveItem, setActive, removeItem } from "../lib/menuStore";
 import { fetchOrdersRange, buildRows, summarize, downloadCSV, downloadXLSX } from "../lib/export";
 import { computeAnalytics, computeSpecialStats, prevPeriod, addDays, localISODate, type Analytics, type SpecialStat } from "../lib/analytics";
-import { euro, isPanino, occupiesGriddle, FORMATS, ingredientsOf, menuDrinkSurcharge, griddlePatty, cartLineOf, cartPrice, cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, specialLeft, type FormatId, type CartType, type CartLine, type MenuItem, type MenuType, type PaninoConfig } from "../lib/menu";
+import { euro, isPanino, hasFormats, occupiesGriddle, FORMATS, ingredientsOf, menuDrinkSurcharge, griddlePatty, cartLineOf, cartPrice, cartItemStrings, cartPatties, cartTotal, cartSpecials, specialCartLine, specialLeft, type FormatId, type CartType, type CartLine, type MenuItem, type MenuType, type PaninoConfig } from "../lib/menu";
 import { ClipboardList, UtensilsCrossed, LogOut, Flame, Clock, Printer, Check, ChevronRight, Store, Pencil, Trash2, X, GripVertical, Leaf, RotateCcw, Wallet, Calendar, ChevronDown, Banknote, CreditCard, Receipt, ShoppingBag, AlertTriangle, Download, Settings, BarChart2, Lock, CalendarClock, Power } from "lucide-react";
 import { subscribeSettings, saveSettings, saveBlockedWindows, blockedWindowsOf, DEFAULT_SETTINGS, type AppSettings } from "../lib/settings";
 import { bluetoothSupported, printESCPOS } from "../lib/bluetoothPrinter";
@@ -1101,7 +1101,7 @@ function PaninoPopup({ item, drinks, onAdd, onClose }: { item: MenuItem; drinks:
   const drink = drinks.find((d) => d.id === drinkId)
              ?? drinks.find((d) => menuDrinkSurcharge(d) === 0)
              ?? drinks[0];
-  const cfg: PaninoConfig = { item, format: fmtId, type, drink, removed, swaps };
+  const cfg: PaninoConfig = { item, format: hasFormats(item) ? fmtId : "singolo", type, drink, removed, swaps };
   const toggleRm = (ing: string) => setRemoved((r) => r.includes(ing) ? r.filter((x) => x !== ing) : [...r, ing]);
   const toggleSwap = (id: string) => setSwaps((v) => v.includes(id) ? v.filter((x) => x !== id) : [...v, id]);
   useEffect(() => {
@@ -1134,7 +1134,7 @@ function PaninoPopup({ item, drinks, onAdd, onClose }: { item: MenuItem; drinks:
 
         <div style={{ padding: "14px 18px" }}>
           {/* 1 · che prodotto è: patty e tipo, vicini */}
-          <Lbl>Patty per hamburger</Lbl>
+          {hasFormats(item) && <><Lbl>Patty per hamburger</Lbl>
           <div style={{ display: "flex", gap: 7, marginBottom: 14 }}>
             {(Object.keys(FORMATS) as FormatId[]).map((f) => (
               <button key={f} onClick={() => setFmtId(f)} style={pick(fmtId === f)}>
@@ -1144,7 +1144,7 @@ function PaninoPopup({ item, drinks, onAdd, onClose }: { item: MenuItem; drinks:
                 </div>
               </button>
             ))}
-          </div>
+          </div></>}
 
           <Lbl>Tipo</Lbl>
           <div style={{ display: "flex", gap: 7 }}>

@@ -45,6 +45,20 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 
 ---
 
+## 2026-11-17
+
+### #73 — Anomalie ordini: fuso del server, pausa, Burger tripli, pagamenti tardivi
+**Tipo:** fix · **Stato:** ✅ fatto (audit da lanciare)
+**File:** `src/lib/schedule.ts`, `src/lib/menu.ts`, `src/lib/booking.ts`, `api/create-booking.ts`, `api/_lib/holds.ts`, `api/nexi-webhook.ts`, `api/stripe-webhook.ts`, `src/pages/Prenotazioni.tsx`, `src/pages/AdminCassa.tsx`, `scripts/audit-ordini.mjs`, test `anomalie-nov`
+**Verifica:** tsc app ✓ · tsc api ✓ · 8 test nuovi ✓ (anche con TZ=UTC come Vercel) · build ✓
+
+Segnalazione del locale: ordini "Chicken triplo" e ordini fatti alle 19:52 con ritiro alle 19:40/19:50.
+1. **Fuso del server**: Vercel gira in UTC e `minWindowNow` usava `getHours()` → alle 19:52 di Roma il server credeva fossero le 18:52, prima dell'apertura: tutte le fasce risultavano future e "primo disponibile" assegnava fasce già passate. Ora `romeNow()` (Intl, Europe/Rome) in `create-booking`.
+2. **Pausa "solo fuori orario"**: la verificava solo la pagina, una volta all'apertura. Ora regola condivisa `isOnlyClosedPause` applicata anche dal server (409 "pausa fuori orario"); la pagina ricalcola orari, sessioni e pausa ogni minuto e dice a che ora si riapre.
+3. **Burger in più formati**: il selettore Singolo/Doppio/Triplo compariva per tutti i panini. Ora `hasFormats()` (solo smash e non `singleFormatOnly`): selettore nascosto su sito e cassa, il server forza "singolo".
+4. **Pagamenti tardivi**: hold liberati a 15 min contro 30 di durata → chi pagava dopo otteneva un ordine `ricollocare` non contato sulla piastra (aggravato dall'autoguarigione della #69). Ora `STALE_MINUTES = HOLD_MINUTES + 5` e i webhook rioccupano celle e special (`reoccupyPatch`).
+5. **Audit**: `scripts/audit-ordini.mjs` (sola lettura; `--fix` solo per hold bloccati e piastre da oggi in poi).
+
 ## 2026-11-08
 
 ### #72 — Archivio special
