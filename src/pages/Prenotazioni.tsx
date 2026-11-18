@@ -11,7 +11,7 @@ import { subscribeMenu } from "../lib/menuStore";
 import { subscribeSettings, DEFAULT_SETTINGS, blockedWindowsOf, type AppSettings } from "../lib/settings";
 import { submitBooking, startCheckout, subscribeLedger, PAY_ENABLED, PAY_DEFAULT, type BookingMode, type PayMethod } from "../lib/orders";
 import { buildConfirmMessage, waLink } from "../lib/whatsapp";
-import { CONDIZIONI_VERSIONE, ANNULLAMENTO_MINUTI, LEGAL } from "../lib/legal";
+import { CONDIZIONI_VERSIONE, LEGAL } from "../lib/legal";
 import { createPortal } from "react-dom";
 import { Leaf, ShoppingBag, Trash2 } from "lucide-react";
 
@@ -436,9 +436,6 @@ export default function Prenotazioni() {
                   Accetto le <a href="/condizioni-garanzia" target="_blank" rel="noopener" style={{ color: C.blue, fontWeight: 600 }}>condizioni di garanzia</a> del servizio.
                 </span>
               </label>
-              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginTop: 8, paddingLeft: 27 }}>
-                Preparazioni espresse: annullabile con rimborso fino a {ANNULLAMENTO_MINUTI} minuti prima dell'apertura del servizio, poi non più.
-              </div>
             </div>
             <button onClick={() => name.trim() && accettaTermini && setStep("pagamento")} disabled={!name.trim() || !accettaTermini} style={{ width: "100%", background: name.trim() && accettaTermini ? C.blue : C.line, color: name.trim() && accettaTermini ? "#fff" : C.muted, border: "none", borderRadius: 12, padding: "15px", fontWeight: 700, fontSize: 15, cursor: name.trim() && accettaTermini ? "pointer" : "default" }}>Confermo</button>
             <button onClick={() => { setStep("quando"); }} style={{ background: "none", color: C.muted, border: "none", marginTop: 12, fontSize: 13.5, cursor: "pointer", textDecoration: "underline" }}>Annulla</button>

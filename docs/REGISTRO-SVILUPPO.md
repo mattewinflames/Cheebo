@@ -55,7 +55,7 @@ Regole: una voce per modifica coerente (non per file toccato). `#ID` rimanda a
 Segnalazione: sul sito mancavano condizioni d'uso, condizioni di garanzia e banner cookie (cookie rimandati: sostituzione reCAPTCHA con Cloudflare Turnstile).
 1. **Due pagine**: `/condizioni-uso` (chi siamo, oggetto, uso del sito, conclusione del contratto, prezzi, pagamento, ritiro, allergeni, dati, foro) e `/condizioni-garanzia` (annullamento cliente con rimborso fino a `ANNULLAMENTO_MINUTI` = 30 min prima dell'apertura del servizio, mancato ritiro senza rimborso, recesso escluso art. 59 c.1 lett. c-d Cod. Consumo, annullamento del Locale con rimborso totale incluso costo servizio, garanzia di conformità artt. 128 ss. e reclami). `/condizioni` porta alle condizioni d'uso.
 2. **Dati del venditore** in `src/lib/legal.ts` (CHEEBO S.R.L., P.IVA/CF 17821961004, REA RM-1744240, PEC, email); punto di ritiro e telefono da `VITE_LOCALE_ADDRESS` / `VITE_LOCALE_PHONE`. Se manca un dato obbligatorio le pagine mostrano "Bozza".
-3. **Conferma ordine**: la vecchia casella unica diventa due caselle obbligatorie (condizioni d'uso, condizioni di garanzia) con link in nuova scheda e promemoria dei 30 minuti.
+3. **Conferma ordine**: la vecchia casella unica diventa due caselle obbligatorie (condizioni d'uso, condizioni di garanzia) con link in nuova scheda.
 4. **Prova dell'accettazione**: la versione (`CONDIZIONI_VERSIONE`) viaggia nella richiesta, finisce nell'hold e i webhook la copiano nell'ordine (`condizioni`). Cambiando i testi, aggiornare la data.
 5. **Footer**: link alle condizioni, ragione sociale e P.IVA (art. 35 DPR 633/72).
 
