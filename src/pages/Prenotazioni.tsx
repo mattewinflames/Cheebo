@@ -11,6 +11,7 @@ import { subscribeMenu } from "../lib/menuStore";
 import { subscribeSettings, DEFAULT_SETTINGS, blockedWindowsOf, type AppSettings } from "../lib/settings";
 import { submitBooking, startCheckout, subscribeLedger, PAY_ENABLED, PAY_DEFAULT, type BookingMode, type PayMethod } from "../lib/orders";
 import { buildConfirmMessage, waLink } from "../lib/whatsapp";
+import { CONDIZIONI_VERSIONE, ANNULLAMENTO_MINUTI, LEGAL } from "../lib/legal";
 import { createPortal } from "react-dom";
 import { Leaf, ShoppingBag, Trash2 } from "lucide-react";
 
@@ -27,7 +28,9 @@ export default function Prenotazioni() {
   const [menuErr, setMenuErr] = useState(false);
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [name, setName] = useState("");
-  const [accettaTermini, setAccettaTermini] = useState(false);
+  const [accettaUso, setAccettaUso] = useState(false);
+  const [accettaGaranzia, setAccettaGaranzia] = useState(false);
+  const accettaTermini = accettaUso && accettaGaranzia;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -161,6 +164,7 @@ export default function Prenotazioni() {
           mode: (choice === "first" || choice === null ? "first" : "at"),
           targetWindow: choice && choice !== "first" ? choice.window : undefined,
           cart: reqCart,
+          condizioni: CONDIZIONI_VERSIONE,
         }) as Awaited<ReturnType<typeof startCheckout>> & { assignedReadyMin?: number; requestedReadyMin?: number };
 
         if (res.ok) {
@@ -417,17 +421,25 @@ export default function Prenotazioni() {
               <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}><span>Totale</span><span style={{ color: C.blue }}>{euro(totalConServizio)}</span></div>
             </div>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Il tuo nome" style={{ width: "100%", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, padding: "13px 14px", fontSize: 16, marginBottom: 14 }} />
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={accettaTermini}
-                onChange={(e) => setAccettaTermini(e.target.checked)}
-                style={{ marginTop: 3, flexShrink: 0, width: 16, height: 16, accentColor: C.blue }}
-              />
-              <span style={{ fontSize: 13, color: C.muted, lineHeight: 1.45 }}>
-                Trattandosi di preparazioni espresse, l'ordine non è annullabile né rimborsabile a 30 minuti dall'apertura del negozio.
-              </span>
-            </label>
+            <div style={{ textAlign: "left", marginBottom: 14 }}>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10, cursor: "pointer" }}>
+                <input type="checkbox" checked={accettaUso} onChange={(e) => setAccettaUso(e.target.checked)}
+                  style={{ marginTop: 2, flexShrink: 0, width: 17, height: 17, accentColor: C.blue }} />
+                <span style={{ fontSize: 13.5, color: C.ink, lineHeight: 1.45 }}>
+                  Accetto i termini e le <a href="/condizioni-uso" target="_blank" rel="noopener" style={{ color: C.blue, fontWeight: 600 }}>condizioni d'uso</a> del servizio.
+                </span>
+              </label>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                <input type="checkbox" checked={accettaGaranzia} onChange={(e) => setAccettaGaranzia(e.target.checked)}
+                  style={{ marginTop: 2, flexShrink: 0, width: 17, height: 17, accentColor: C.blue }} />
+                <span style={{ fontSize: 13.5, color: C.ink, lineHeight: 1.45 }}>
+                  Accetto le <a href="/condizioni-garanzia" target="_blank" rel="noopener" style={{ color: C.blue, fontWeight: 600 }}>condizioni di garanzia</a> del servizio.
+                </span>
+              </label>
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginTop: 8, paddingLeft: 27 }}>
+                Preparazioni espresse: annullabile con rimborso fino a {ANNULLAMENTO_MINUTI} minuti prima dell'apertura del servizio, poi non più.
+              </div>
+            </div>
             <button onClick={() => name.trim() && accettaTermini && setStep("pagamento")} disabled={!name.trim() || !accettaTermini} style={{ width: "100%", background: name.trim() && accettaTermini ? C.blue : C.line, color: name.trim() && accettaTermini ? "#fff" : C.muted, border: "none", borderRadius: 12, padding: "15px", fontWeight: 700, fontSize: 15, cursor: name.trim() && accettaTermini ? "pointer" : "default" }}>Confermo</button>
             <button onClick={() => { setStep("quando"); }} style={{ background: "none", color: C.muted, border: "none", marginTop: 12, fontSize: 13.5, cursor: "pointer", textDecoration: "underline" }}>Annulla</button>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>Lo slot è tenuto per te per alcuni minuti, fino alla conferma.</div>
@@ -471,7 +483,13 @@ export default function Prenotazioni() {
           <button onClick={reset} style={{ background: "none", color: C.muted, border: "none", marginTop: 16, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>Nuova prenotazione</button>
         </div>
       )}
-      <div style={{ textAlign: "center", padding: "18px 0 14px", fontSize: 11, color: C.muted, opacity: 0.55, letterSpacing: 0.3 }}>
+      <div style={{ textAlign: "center", padding: "18px 0 14px", fontSize: 11, color: C.muted, opacity: 0.55, letterSpacing: 0.3, lineHeight: 1.7 }}>
+        <div>
+          <a href="/condizioni-uso" target="_blank" rel="noopener" style={{ color: "inherit" }}>Condizioni d'uso</a>
+          <span aria-hidden="true"> · </span>
+          <a href="/condizioni-garanzia" target="_blank" rel="noopener" style={{ color: "inherit" }}>Condizioni di garanzia</a>
+        </div>
+        <div>{LEGAL.ragioneSociale} · P.IVA {LEGAL.piva}</div>
         <a href="https://mattewinflamestudio.com" target="_blank" rel="noopener noreferrer"
           style={{ color: "inherit", textDecoration: "none" }}
           onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}

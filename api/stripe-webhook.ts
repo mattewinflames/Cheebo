@@ -85,6 +85,7 @@ async function confirm(session: Stripe.Checkout.Session): Promise<void> {
       windowIndex: hold.windowIndex, readyMin: hold.readyMin, cells: hold.cells ?? [], mode: hold.mode, pay: "online",
       total: hold.total, code, phone: hold.phone, channel: "prenotazione",
       specials: hold.specials ?? {},   // id special → pezzi (statistiche special)
+      ...(hold.condizioni ? { condizioni: hold.condizioni } : {}),   // condizioni di vendita accettate
       status: "nuovo", createdAt: FieldValue.serverTimestamp(), stripeSessionId: session.id,
       ...(ricollocare ? { ricollocare: true } : {}),
     });

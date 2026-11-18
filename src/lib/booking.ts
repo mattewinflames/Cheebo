@@ -27,6 +27,8 @@ export interface BookingReq {
   mode: "first" | "at";
   targetWindow?: number;     // richiesto se mode === "at"
   cart: CartReqLine[];
+  /** versione delle condizioni di vendita accettate dal cliente (CONDIZIONI_VERSIONE) */
+  condizioni?: string;
 }
 
 /** Riga per Stripe Checkout: importo in CENTESIMI (Stripe vuole gli interi). */

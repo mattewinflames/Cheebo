@@ -74,4 +74,5 @@ export interface Hold {
   code?: number;
   expiresAt: Timestamp;
   createdAt?: unknown;
+  condizioni?: string;                // versione delle condizioni di vendita accettate
 }

@@ -126,6 +126,7 @@ async function confirm(holdId: string, nexiOperationId: string): Promise<void> {
       mode: hold.mode, pay: "online",
       total: hold.total, code, phone: hold.phone, channel: "prenotazione",
       specials: hold.specials ?? {},   // id special → pezzi (statistiche special)
+      ...(hold.condizioni ? { condizioni: hold.condizioni } : {}),   // condizioni di vendita accettate
       status: "nuovo", createdAt: FieldValue.serverTimestamp(),
       nexiOperationId,
       ...(ricollocare ? { ricollocare: true } : {}),

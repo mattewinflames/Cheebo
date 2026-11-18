@@ -22,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "metodo non consentito" });
 
   const body = (req.body ?? {}) as Partial<BookingReq>;
-  const { serviceKey, name, phone, mode, targetWindow, cart } = body;
+  const { serviceKey, name, phone, mode, targetWindow, cart, condizioni } = body;
 
   if (typeof serviceKey !== "string") return res.status(400).json({ error: "serviceKey mancante" });
   if (typeof name !== "string" || !name.trim() || name.length > 60) return res.status(400).json({ error: "nome non valido" });
@@ -156,6 +156,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         items: resolved.items, total: resolved.totalConServizio, serviceCharge: resolved.serviceCharge,
         status: "attesa", expiresAt: Timestamp.fromMillis(Date.now() + HOLD_MINUTES * 60_000),
         createdAt: FieldValue.serverTimestamp(),
+        // prova dell'accettazione: versione delle condizioni di vendita spuntata dal cliente
+        ...(typeof condizioni === "string" && /^\d{4}-\d{2}-\d{2}$/.test(condizioni) ? { condizioni } : {}),
       };
       tx.set(holdRef, hold);
       return { ok: true, windowIndex: plan.windowIndex, readyMin: plan.readyMin, requestedReadyMin };
